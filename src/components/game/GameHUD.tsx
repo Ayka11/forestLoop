@@ -139,6 +139,12 @@ export default function GameHUD() {
         </button>
       </div>
 
+      {/* Level feedback */}
+      <div className="bg-black/40 backdrop-blur-sm rounded-xl px-3 py-1.5 text-white flex items-center gap-2 mt-2">
+        <span className="font-bold">Level:</span>
+        <span className="text-lg">{engine.current?.currentLevel !== undefined ? engine.current.currentLevel + 1 : 1}</span>
+      </div>
+
       {/* Tutorial hint */}
       {gameState.distance < 100 && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-sm animate-pulse">

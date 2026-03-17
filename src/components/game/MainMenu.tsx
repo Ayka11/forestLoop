@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { Play, ShoppingBag, User, Trophy, Calendar, Settings, Volume2, VolumeX, BarChart3 } from 'lucide-react';
 import * as Audio from '@/game/audio';
+import { BIOME_COLORS, BIOME_UNLOCK_MILESTONES } from '@/game/types';
+import ProfilePage from '@/components/game/ProfilePage';
+import Lobby from '@/components/game/Lobby';
 
 const HERO_BG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1773728406342_97a56aa9.png';
 const FOX_IMG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1773728440372_08f5360f.jpg';
@@ -9,7 +12,10 @@ const FOX_IMG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1
 export default function MainMenu() {
   const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, dailyChallenges } = useGame();
   const [showSettings, setShowSettings] = useState(false);
-  const [animReady, setAnimReady] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showLobby, setShowLobby] = useState(false);
+  const playerId = avatar?.id || 'demo-player'; // Replace with actual player ID
+  const avatarUrl = avatar?.avatarUrl || '';
 
   useEffect(() => {
     setTimeout(() => setAnimReady(true), 100);
@@ -132,6 +138,21 @@ export default function MainMenu() {
             </button>
           </div>
         )}
+
+        <div className="flex gap-4 mt-6">
+          <button className="btn btn-lg" onClick={handlePlay}><Play className="inline mr-2" />Play</button>
+          <button className="btn btn-lg" onClick={() => setShowProfile(true)}><User className="inline mr-2" />Profile</button>
+          <button className="btn btn-lg" onClick={() => setShowLobby(true)}><BarChart3 className="inline mr-2" />Multiplayer</button>
+        </div>
+        {showProfile && <ProfilePage playerId={playerId} />}
+        {showLobby && <Lobby playerId={playerId} avatar={avatarUrl} />}
+      </div>
+
+      {/* Biome Unlock Gallery */}
+      <div className="absolute left-0 right-0 mx-auto mt-8 max-w-2xl z-10">
+        {engine.current && engine.current.state && (
+          <BiomeGallery unlockedBiomes={engine.current.state.unlockedBiomes || []} />
+        )}
       </div>
 
       {/* Bottom decoration */}
@@ -154,5 +175,28 @@ function MenuButton({ icon, label, color, onClick, badge }: { icon: React.ReactN
         </div>
       )}
     </button>
+  );
+}
+
+// Biome unlock gallery component
+export function BiomeGallery({ unlockedBiomes }: { unlockedBiomes: string[] }) {
+  const biomes = Object.keys(BIOME_COLORS);
+  return (
+    <div className="biome-gallery grid grid-cols-2 gap-4 p-4">
+      {biomes.map(biome => (
+        <div key={biome} className={`biome-card rounded-xl p-4 shadow-lg ${unlockedBiomes.includes(biome) ? 'bg-white' : 'bg-gray-200 opacity-60'}`}>
+          <div className="biome-art mb-2">{/* Render biome preview art here */}</div>
+          <div className="font-bold text-lg mb-1">{biome.charAt(0).toUpperCase() + biome.slice(1)}</div>
+          <div className="mb-2">
+            {unlockedBiomes.includes(biome)
+              ? 'Unlocked'
+              : `Locked (Reach ${BIOME_UNLOCK_MILESTONES[biome] || 'N/A'}m)`}
+          </div>
+          <button className="btn btn-sm" disabled={!unlockedBiomes.includes(biome)}>
+            Preview Music
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -17,11 +17,18 @@ function GameApp() {
   const isInGame = screen === 'playing' || screen === 'paused' || screen === 'crafting' || screen === 'gameover';
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black select-none" style={{ fontFamily: "'Fredoka', 'Comic Neue', sans-serif" }}>
-      {/* Game canvas - always rendered behind overlays */}
-      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-900 to-black">
-        <GameCanvas />
-      </div>
+    <div className="relative w-screen h-screen overflow-hidden select-none" style={{ fontFamily: "'Fredoka', 'Comic Neue', sans-serif" }}>
+      {/* Game canvas - only show background when not playing */}
+      {screen !== 'playing' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-900 to-black">
+          <GameCanvas />
+        </div>
+      )}
+      {screen === 'playing' && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <GameCanvas />
+        </div>
+      )}
 
       {/* UI Overlays */}
       {screen === 'menu' && <MainMenu />}

@@ -129,7 +129,7 @@ export interface Resources {
   leaf: number;
 }
 
-export type BiomeType = 'enchanted' | 'crystal' | 'autumn' | 'firefly';
+export type BiomeType = 'enchanted' | 'crystal' | 'autumn' | 'firefly' | 'candy' | 'frozen' | 'volcanic' | 'cloud';
 
 export interface CraftRecipe {
   id: string;
@@ -216,6 +216,57 @@ export const BIOME_COLORS: Record<BiomeType, { sky: string[]; ground: string; ac
     trees: ['#1B5E20', '#2E7D32', '#1A237E', '#263238'],
     flowers: ['#FFEB3B', '#76FF03', '#00E676', '#69F0AE', '#B2FF59'],
   },
+  candy: {
+    ground: '#FFC1E3',
+    trees: ['#FFB6C1', '#FFD1DC'],
+    flowers: ['#FF69B4'],
+    background: '#FFF0F5',
+    particles: 'sparkle',
+    music: 'whimsical',
+    platforms: ['pastel', 'gumdrop'],
+    obstacles: ['candyMonster'],
+    collectibles: ['gumdrop', 'lollipop'],
+  },
+  frozen: {
+    ground: '#B3EFFF',
+    trees: ['#E0F7FA', '#B2EBF2'],
+    flowers: ['#81D4FA'],
+    background: '#EAF6FF',
+    particles: 'snowflake',
+    music: 'icy',
+    platforms: ['ice', 'snow'],
+    obstacles: ['snowball'],
+    collectibles: ['snowflake', 'iceGem'],
+  },
+  volcanic: {
+    ground: '#FF7043',
+    trees: ['#FFAB91', '#D84315'],
+    flowers: ['#FF8A65'],
+    background: '#2D2D2D',
+    particles: 'ember',
+    music: 'intense',
+    platforms: ['lava', 'crystal'],
+    obstacles: ['magmaMonster'],
+    collectibles: ['ember', 'crystalShard'],
+  },
+  cloud: {
+    ground: '#E3F6FF',
+    trees: ['#B3E5FC', '#81D4FA'],
+    flowers: ['#B2EBF2'],
+    background: '#F0F8FF',
+    particles: 'cloud',
+    music: 'airy',
+    platforms: ['cloud', 'rainbow'],
+    obstacles: ['windGust'],
+    collectibles: ['star', 'rainbowGem'],
+  },
+};
+
+export const BIOME_UNLOCK_MILESTONES = {
+  candy: 20000,
+  frozen: 30000,
+  volcanic: 40000,
+  cloud: 50000,
 };
 
 export const CRAFT_RECIPES: CraftRecipe[] = [

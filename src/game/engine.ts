@@ -30,6 +30,42 @@ if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D
 
 // ===== GAME ENGINE =====
 export class GameEngine {
+    // ...existing code...
+    loadLevel(levelIndex: number) {
+      const level = levels[levelIndex];
+      if (!level) return;
+      this.platforms = [];
+      this.obstacles = [];
+      this.collectibles = [];
+      // Load platforms
+      for (const p of level.platforms) {
+        this.platforms.push({
+          x: p.x, y: p.y, width: p.width, height: 20,
+          type: 'ground', color: BIOME_COLORS[this.state.biome].ground,
+        });
+      }
+      // Load enemies
+      for (const e of level.enemies) {
+        this.obstacles.push({
+          x: e.x, y: e.y, width: 36, height: 32,
+          type: e.type, speed: 1, bounceOffset: 0, direction: -1,
+        });
+      }
+      // Load coins
+      for (const c of level.coins) {
+        this.collectibles.push({
+          x: c.x, y: c.y, width: 24, height: 24, type: 'leafToken', collected: false,
+          bobOffset: this.random() * Math.PI * 2, sparkle: 0,
+        });
+      }
+      // Load power-ups
+      for (const pu of level.powerUps) {
+        this.collectibles.push({
+          x: pu.x, y: pu.y, width: 24, height: 24, type: pu.type, collected: false,
+          bobOffset: this.random() * Math.PI * 2, sparkle: 0,
+        });
+      }
+    }
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   width: number;
@@ -79,6 +115,10 @@ export class GameEngine {
     this.state = this.createGameState();
     this.avatar = { character: 'fox', color: '#FF8C42', hat: null, accessory: null, pet: null, trail: null };
 
+    // Early-game invincibility grace period
+    this.player.invincible = true;
+    this.player.invincibilityGraceDistance = 500; // Custom property for grace period
+
     this.initBackground();
     this.resize();
   }
@@ -100,11 +140,12 @@ export class GameEngine {
       score: 0, distance: 0, leafTokens: 0,
       totalLeafTokens: parseInt(localStorage.getItem('flo_totalTokens') || '0'),
       resources: { wood: 0, stone: 0, flower: 0, leaf: 0 },
-      combo: 0, comboTimer: 0, multiplier: 1, lives: 3,
+      combo: 0, comboTimer: 0, multiplier: 1, lives: 5, // Increased initial lives
       checkpointDistance: 0, speed: BASE_SCROLL_SPEED, baseSpeed: BASE_SCROLL_SPEED,
       biome: 'enchanted', gameTime: 0, isPaused: false, isGameOver: false, isPlaying: false,
       dailyChallenge: null, achievements: JSON.parse(localStorage.getItem('flo_achievements') || '[]'),
       streak: parseInt(localStorage.getItem('flo_streak') || '0'),
+      unlockedBiomes: ['enchanted', 'crystal', 'autumn', 'firefly'],
     };
   }
 
@@ -193,13 +234,13 @@ export class GameEngine {
     this.craftedItems = [];
     this.nextPlatformX = 0;
     this.nextCollectibleX = 300;
-    this.nextObstacleX = 800;
+    this.nextObstacleX = 300; // Delay obstacle spawn for early-game safety
     this.terrainX = 0;
     this.seed = Math.random() * 10000;
     this.initBackground();
 
-    // Generate initial terrain
-    this.generateInitialTerrain();
+    // Load Level 0 (first level)
+    this.loadLevel(0);
 
     Audio.startMusic();
     this.lastTime = performance.now();
@@ -224,57 +265,48 @@ export class GameEngine {
   }
 
   generateInitialTerrain() {
+    const biome = BIOME_COLORS[this.state.biome];
+    // Update terrain/platform generation to use biome-specific assets and mechanics
     // Ground platforms
     for (let x = -100; x < CANVAS_WIDTH + 600; x += 200 + this.random() * 100) {
       const w = 150 + this.random() * 250;
       this.platforms.push({
         x, y: GROUND_Y, width: w, height: 200,
-        type: 'ground', color: BIOME_COLORS[this.state.biome].ground,
+        type: biome.platforms ? biome.platforms[0] : 'ground', color: biome.ground,
       });
       this.nextPlatformX = x + w + 60 + this.random() * 120;
     }
     // Some floating platforms
     for (let i = 0; i < 5; i++) {
       const x = 400 + i * 300 + this.random() * 100;
-      this.addFloatingPlatform(x);
+      this.addFloatingPlatform(x, biome);
     }
     // Initial collectibles
     for (let i = 0; i < 10; i++) {
-      this.addCollectible(300 + i * 150 + this.random() * 80);
+      this.addCollectible(300 + i * 150 + this.random() * 80, biome);
     }
   }
 
-  addFloatingPlatform(x: number) {
-    const types: Platform['type'][] = ['floating', 'mushroom', 'vine', 'log'];
+  addFloatingPlatform(x: number, biome: any) {
+    const types = biome.platforms || ['floating', 'mushroom', 'vine', 'log'];
     const type = types[Math.floor(this.random() * types.length)];
     const y = GROUND_Y - 100 - this.random() * 200;
     const w = type === 'mushroom' ? 60 : 80 + this.random() * 120;
-    const biome = BIOME_COLORS[this.state.biome];
     const colors: Record<string, string> = {
       floating: biome.trees[2], mushroom: '#FF6B6B', vine: '#4CAF50', log: '#8D6E63',
+      pastel: '#FFC1E3', gumdrop: '#FFB6C1', ice: '#B3EFFF', snow: '#E0F7FA', lava: '#FF7043', crystal: '#FF8A65', cloud: '#E3F6FF', rainbow: '#B3E5FC',
     };
     this.platforms.push({
       x, y, width: w, height: type === 'mushroom' ? 20 : 16,
-      type, color: colors[type], bouncy: type === 'mushroom',
+      type, color: colors[type] || biome.ground, bouncy: type === 'mushroom',
       moving: this.random() > 0.7, moveRange: 40 + this.random() * 60,
       moveSpeed: 0.5 + this.random() * 1.5, originalY: y,
     });
   }
 
-  addCollectible(x: number) {
-    const r = this.random();
-    let type: Collectible['type'];
-    if (r < 0.25) type = 'wood';
-    else if (r < 0.45) type = 'stone';
-    else if (r < 0.6) type = 'flower';
-    else if (r < 0.75) type = 'leaf';
-    else if (r < 0.85) type = 'leafToken';
-    else if (r < 0.89) type = 'mushroom_powerup';
-    else if (r < 0.93) type = 'star';
-    else if (r < 0.96) type = 'fireFlower';
-    else if (r < 0.98) type = 'leafWings';
-    else type = 'speedBoots';
-
+  addCollectible(x: number, biome: any) {
+    const types = biome.collectibles || ['wood', 'stone', 'flower', 'leaf', 'leafToken'];
+    const type = types[Math.floor(this.random() * types.length)];
     const y = GROUND_Y - 60 - this.random() * 200;
     this.collectibles.push({
       x, y, width: 24, height: 24, type, collected: false,
@@ -283,8 +315,11 @@ export class GameEngine {
   }
 
   addObstacle(x: number) {
-    const types: Obstacle['type'][] = ['slime', 'bird', 'rollingLog'];
-    const type = types[Math.floor(this.random() * types.length)];
+    // Limit obstacle types based on distance for gradual difficulty
+    let allowedTypes: Obstacle['type'][] = ['slime'];
+    if (this.state.distance > 1000) allowedTypes.push('bird');
+    if (this.state.distance > 2000) allowedTypes.push('rollingLog');
+    const type = allowedTypes[Math.floor(this.random() * allowedTypes.length)];
     const y = type === 'bird' ? GROUND_Y - 120 - this.random() * 100 : GROUND_Y - 30;
     this.obstacles.push({
       x, y, width: type === 'rollingLog' ? 50 : 36, height: type === 'rollingLog' ? 36 : 32,
@@ -358,7 +393,22 @@ export class GameEngine {
     this.update(dt);
     this.render();
 
-    this.animationId = requestAnimationFrame(this.loop);
+    // Level progression: advance when player reaches farthest platform
+    const platforms = this.platforms;
+    if (platforms.length > 0) {
+      const farthest = Math.max(...platforms.map(p => p.x + p.width));
+      if (this.player.x > farthest - 20 && this.currentLevel < levels.length - 1) {
+        this.currentLevel++;
+        this.loadLevel(this.currentLevel);
+        this.player.x = 0;
+        this.player.y = GROUND_Y - 40;
+        this.state.lives = 5;
+        // Optionally reset score or keep accumulating
+        this.emitState();
+      }
+    }
+
+    requestAnimationFrame(this.loop);
   };
 
   update(dt: number) {
@@ -375,8 +425,17 @@ export class GameEngine {
     this.state.score = Math.floor(this.state.distance) + this.state.leafTokens * 10;
     this.terrainX += speed;
 
-    // Speed increase over time
-    this.state.speed = Math.min(this.state.baseSpeed + this.state.distance * 0.0005, 10);
+    // Disable invincibility after grace period
+    if (this.player.invincible && this.state.distance > (this.player.invincibilityGraceDistance || 500)) {
+      this.player.invincible = false;
+    }
+
+    // Speed increase over time (slower ramp-up for first 1000m)
+    if (this.state.distance < 1000) {
+      this.state.speed = Math.min(this.state.baseSpeed + this.state.distance * 0.0002, 6);
+    } else {
+      this.state.speed = Math.min(this.state.baseSpeed + (this.state.distance - 1000) * 0.0005 + 0.2, 10);
+    }
     if (this.player.speedBoost) this.state.speed *= 1.5;
 
     // Combo timer
@@ -1439,4 +1498,96 @@ export class GameEngine {
     this.stop();
     cancelAnimationFrame(this.animationId);
   }
+}
+
+// Mario-style level data
+export const levels = [
+  {
+    platforms: [
+      { x: 0, y: GROUND_Y, width: 200 },
+      { x: 220, y: GROUND_Y - 40, width: 120 },
+      { x: 370, y: GROUND_Y - 20, width: 180 },
+      { x: 600, y: GROUND_Y - 60, width: 140 },
+    ],
+    enemies: [
+      { x: 250, y: GROUND_Y - 40, type: 'slime' },
+    ],
+    coins: [
+      { x: 230, y: GROUND_Y - 60 },
+      { x: 400, y: GROUND_Y - 80 },
+    ],
+    powerUps: [
+      { x: 400, y: GROUND_Y - 20, type: 'shield' },
+    ],
+  },
+  {
+    platforms: [
+      { x: 0, y: GROUND_Y, width: 180 },
+      { x: 200, y: GROUND_Y - 60, width: 140 },
+      { x: 370, y: GROUND_Y - 100, width: 120 },
+      { x: 520, y: GROUND_Y - 40, width: 160 },
+      { x: 700, y: GROUND_Y - 80, width: 120 },
+    ],
+    enemies: [
+      { x: 220, y: GROUND_Y - 60, type: 'slime' },
+      { x: 400, y: GROUND_Y - 100, type: 'bird' },
+    ],
+    coins: [
+      { x: 250, y: GROUND_Y - 80 },
+      { x: 600, y: GROUND_Y - 60 },
+    ],
+    powerUps: [
+      { x: 700, y: GROUND_Y - 80, type: 'leafWings' },
+    ],
+  },
+  {
+    platforms: [
+      { x: 0, y: GROUND_Y, width: 160 },
+      { x: 180, y: GROUND_Y - 120, width: 120 },
+      { x: 320, y: GROUND_Y - 60, width: 140 },
+      { x: 500, y: GROUND_Y - 140, width: 120 },
+      { x: 650, y: GROUND_Y - 100, width: 160 },
+      { x: 850, y: GROUND_Y - 80, width: 120 },
+    ],
+    enemies: [
+      { x: 320, y: GROUND_Y - 60, type: 'slime' },
+      { x: 500, y: GROUND_Y - 140, type: 'rollingLog' },
+      { x: 700, y: GROUND_Y - 100, type: 'bird' },
+    ],
+    coins: [
+      { x: 200, y: GROUND_Y - 120 },
+      { x: 650, y: GROUND_Y - 100 },
+      { x: 850, y: GROUND_Y - 80 },
+    ],
+    powerUps: [
+      { x: 500, y: GROUND_Y - 140, type: 'star' },
+    ],
+  },
+];
+
+// Multiplayer sync logic
+export function syncMultiplayer(lobbyId: string) {
+  // Subscribe to game session updates
+  subscribeGameSession(lobbyId, (state) => {
+    // Update local game state with synced state
+    this.state = { ...this.state, ...state };
+    // Update player positions, crafted items, resources, etc.
+  });
+}
+
+export function updateMultiplayerState(lobbyId: string) {
+  // Call this after player actions (move, craft, collect)
+  updateGameSession(lobbyId, {
+    playerPositions: this.getPlayerPositions(),
+    craftedItems: this.craftedItems,
+    resources: this.state.resources,
+    score: this.state.score,
+    // Add other shared state as needed
+  });
+}
+
+export function getPlayerPositions() {
+  // Example: return array of player positions
+  return [{ id: this.player.id, x: this.player.x, y: this.player.y }];
+  // Extend for multiple players
 }
