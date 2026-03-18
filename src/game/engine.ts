@@ -37,18 +37,19 @@ export class GameEngine {
       this.platforms = [];
       this.obstacles = [];
       this.collectibles = [];
+      const biome = BIOME_COLORS[this.state.biome];
       // Load platforms
       for (const p of level.platforms) {
         this.platforms.push({
           x: p.x, y: p.y, width: p.width, height: 20,
-          type: 'ground', color: BIOME_COLORS[this.state.biome].ground,
+          type: (biome.platforms ? biome.platforms[0] : 'ground') as Platform['type'], color: biome.ground,
         });
       }
       // Load enemies
       for (const e of level.enemies) {
         this.obstacles.push({
           x: e.x, y: e.y, width: 36, height: 32,
-          type: e.type, speed: 1, bounceOffset: 0, direction: -1,
+          type: e.type as Obstacle['type'], speed: 1, bounceOffset: 0, direction: -1,
         });
       }
       // Load coins
@@ -61,7 +62,7 @@ export class GameEngine {
       // Load power-ups
       for (const pu of level.powerUps) {
         this.collectibles.push({
-          x: pu.x, y: pu.y, width: 24, height: 24, type: pu.type, collected: false,
+          x: pu.x, y: pu.y, width: 24, height: 24, type: pu.type as Collectible['type'], collected: false,
           bobOffset: this.random() * Math.PI * 2, sparkle: 0,
         });
       }
@@ -83,6 +84,7 @@ export class GameEngine {
   // State
   player: PlayerState;
   state: GameState;
+  currentLevel: number = 0;
   avatar: AvatarConfig;
 
   // Callbacks
@@ -224,6 +226,7 @@ export class GameEngine {
   }
 
   start() {
+    console.log('GameEngine.start() called');
     this.player = this.createPlayer();
     this.state = { ...this.createGameState(), totalLeafTokens: this.state.totalLeafTokens, achievements: this.state.achievements, streak: this.state.streak };
     this.state.isPlaying = true;
@@ -272,7 +275,7 @@ export class GameEngine {
       const w = 150 + this.random() * 250;
       this.platforms.push({
         x, y: GROUND_Y, width: w, height: 200,
-        type: biome.platforms ? biome.platforms[0] : 'ground', color: biome.ground,
+        type: (biome.platforms ? biome.platforms[0] : 'ground') as Platform['type'], color: biome.ground,
       });
       this.nextPlatformX = x + w + 60 + this.random() * 120;
     }
@@ -374,7 +377,7 @@ export class GameEngine {
     const h = recipe.type === 'wall' ? 80 : 20;
     this.craftedItems.push({
       x: px, y: py, width: w, height: h,
-      type: recipe.type, color: recipe.type === 'bridge' ? '#8D6E63' : recipe.type === 'platform' ? '#FF69B4' : recipe.type === 'ramp' ? '#FFD700' : '#90A4AE',
+      type: recipe.type as Platform['type'], color: recipe.type === 'bridge' ? '#8D6E63' : recipe.type === 'platform' ? '#FF69B4' : recipe.type === 'ramp' ? '#FFD700' : '#90A4AE',
       bouncy: recipe.type === 'platform',
     });
     Audio.playCraft();
@@ -755,13 +758,13 @@ export class GameEngine {
       });
       // Add floating platforms above
       if (this.random() > 0.4) {
-        this.addFloatingPlatform(this.nextPlatformX + gap + this.random() * w);
+        this.addFloatingPlatform(this.nextPlatformX + gap + this.random() * w, BIOME_COLORS[this.state.biome]);
       }
       this.nextPlatformX += gap + w;
     }
 
     while (this.nextCollectibleX < ahead) {
-      this.addCollectible(this.nextCollectibleX);
+      this.addCollectible(this.nextCollectibleX, BIOME_COLORS[this.state.biome]);
       this.nextCollectibleX += 80 + this.random() * 120;
     }
 
@@ -1565,29 +1568,15 @@ export const levels = [
   },
 ];
 
-// Multiplayer sync logic
-export function syncMultiplayer(lobbyId: string) {
-  // Subscribe to game session updates
-  subscribeGameSession(lobbyId, (state) => {
-    // Update local game state with synced state
-    this.state = { ...this.state, ...state };
-    // Update player positions, crafted items, resources, etc.
-  });
-}
+// Multiplayer sync logic (stubbed, implement as needed)
+// export function syncMultiplayer(lobbyId: string) {
+//   // Implement multiplayer sync logic here
+// }
 
-export function updateMultiplayerState(lobbyId: string) {
-  // Call this after player actions (move, craft, collect)
-  updateGameSession(lobbyId, {
-    playerPositions: this.getPlayerPositions(),
-    craftedItems: this.craftedItems,
-    resources: this.state.resources,
-    score: this.state.score,
-    // Add other shared state as needed
-  });
-}
+// export function updateMultiplayerState(lobbyId: string) {
+//   // Implement multiplayer state update logic here
+// }
 
-export function getPlayerPositions() {
-  // Example: return array of player positions
-  return [{ id: this.player.id, x: this.player.x, y: this.player.y }];
-  // Extend for multiple players
-}
+// export function getPlayerPositions() {
+//   // Implement player position retrieval here
+// }

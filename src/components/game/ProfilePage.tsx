@@ -29,6 +29,14 @@ export default function ProfilePage({ playerId }) {
   return (
     <div className="p-6 max-w-xl mx-auto">
       <h2 className="text-2xl font-bold mb-4">Player Profile</h2>
+      {/* Avatar Customizer embedded here */}
+      <div className="mb-6">
+        <span className="font-semibold">Avatar Customization:</span>
+        <div className="mt-2">
+          {/* AvatarCustomizer component */}
+          <AvatarCustomizer />
+        </div>
+      </div>
       <div className="mb-4">
         <span className="font-semibold">Display Name:</span>
         <input value={editName} onChange={e => setEditName(e.target.value)} className="ml-2 border px-2" />

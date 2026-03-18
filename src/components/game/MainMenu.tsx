@@ -14,6 +14,7 @@ export default function MainMenu() {
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
+  const [animReady, setAnimReady] = useState(false);
   const playerId = avatar?.id || 'demo-player'; // Replace with actual player ID
   const avatarUrl = avatar?.avatarUrl || '';
 
@@ -22,9 +23,15 @@ export default function MainMenu() {
   }, []);
 
   const handlePlay = () => {
+    console.log('handlePlay called');
     Audio.resumeAudio();
     setScreen('playing');
-    engine.current?.start();
+    if (engine.current) {
+      console.log('engine.current.start() called');
+      engine.current.start();
+    } else {
+      console.log('engine.current is null');
+    }
   };
 
   return (
@@ -108,23 +115,18 @@ export default function MainMenu() {
           <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
         </button>
 
-        {/* Menu buttons — 5 items, responsive grid */}
-        <div className="grid grid-cols-3 md:grid-cols-5 gap-3 max-w-xl w-full">
+        {/* Menu buttons — flex and centered */}
+        <div className="flex flex-wrap justify-center items-center gap-3 max-w-xl mx-auto w-full">
           <MenuButton icon={<BarChart3 size={20} />} label="Leaders" color="from-yellow-500 to-amber-600" onClick={() => setScreen('leaderboard')} />
           <MenuButton icon={<ShoppingBag size={20} />} label="Shop" color="from-purple-500 to-pink-500" onClick={() => setScreen('shop')} />
-          <MenuButton icon={<User size={20} />} label="Avatar" color="from-blue-500 to-cyan-500" onClick={() => setScreen('avatar')} />
+          <MenuButton icon={<User size={20} />} label="Profile" color="from-blue-500 to-cyan-500" onClick={() => setShowProfile(true)} />
+          <MenuButton icon={<BarChart3 size={20} />} label="Multiplayer" color="from-green-500 to-teal-500" onClick={() => setShowLobby(true)} />
+          <MenuButton icon={<Settings size={20} />} label="Settings" color="from-gray-500 to-slate-600" onClick={() => setShowSettings(!showSettings)} />
           <MenuButton icon={<Trophy size={20} />} label="Achieve" color="from-amber-500 to-orange-500" onClick={() => setScreen('achievements')} />
           <MenuButton icon={<Calendar size={20} />} label="Daily" color="from-rose-500 to-red-500" onClick={() => setScreen('daily')} badge={dailyChallenges.length} />
         </div>
 
-        {/* Settings toggle */}
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="mt-4 text-white/50 hover:text-white/80 transition-colors flex items-center gap-1 text-sm"
-        >
-          <Settings size={16} />
-          Settings
-        </button>
+        {/* Settings toggle removed, now in menu grid */}
 
         {showSettings && (
           <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-3 flex gap-4">
@@ -140,9 +142,7 @@ export default function MainMenu() {
         )}
 
         <div className="flex gap-4 mt-6">
-          <button className="btn btn-lg" onClick={handlePlay}><Play className="inline mr-2" />Play</button>
-          <button className="btn btn-lg" onClick={() => setShowProfile(true)}><User className="inline mr-2" />Profile</button>
-          <button className="btn btn-lg" onClick={() => setShowLobby(true)}><BarChart3 className="inline mr-2" />Multiplayer</button>
+          {/* Removed repeating Profile and Multiplayer buttons */}
         </div>
         {showProfile && <ProfilePage playerId={playerId} />}
         {showLobby && <Lobby playerId={playerId} avatar={avatarUrl} />}

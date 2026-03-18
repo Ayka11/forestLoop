@@ -95,6 +95,9 @@ export interface PlayerState {
   trailColor: string;
   squash: number;
   stretch: number;
+  // Custom properties
+  invincibilityGraceDistance?: number;
+  id?: string; // for multiplayer
 }
 
 export type PowerUpType = 'mushroom' | 'star' | 'fireFlower' | 'leafWings' | 'speedBoots' | 'shield';
@@ -120,6 +123,7 @@ export interface GameState {
   dailyChallenge: DailyChallenge | null;
   achievements: string[];
   streak: number;
+  unlockedBiomes?: BiomeType[];
 }
 
 export interface Resources {
@@ -187,7 +191,21 @@ export const CANVAS_HEIGHT = 700;
 export const CHECKPOINT_INTERVAL = 2000;
 export const POWERUP_DURATION = 600;
 
-export const BIOME_COLORS: Record<BiomeType, { sky: string[]; ground: string; accent: string; trees: string[]; flowers: string[] }> = {
+export interface BiomeConfig {
+  sky?: string[];
+  ground: string;
+  accent?: string;
+  trees: string[];
+  flowers: string[];
+  background?: string;
+  particles?: string;
+  music?: string;
+  platforms?: string[];
+  obstacles?: string[];
+  collectibles?: string[];
+}
+
+export const BIOME_COLORS: Record<BiomeType, BiomeConfig> = {
   enchanted: {
     sky: ['#87CEEB', '#B0E0E6', '#98FB98'],
     ground: '#4A7C3F',
