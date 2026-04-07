@@ -10,7 +10,22 @@ const HERO_BG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1
 const FOX_IMG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1773728440372_08f5360f.jpg';
 
 export default function MainMenu() {
-  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, dailyChallenges } = useGame();
+  const {
+    engine,
+    setScreen,
+    avatar,
+    highScore,
+    totalTokens,
+    musicEnabled,
+    sfxEnabled,
+    toggleMusic,
+    toggleSfx,
+    dailyChallenges,
+    runForwardMode,
+    setRunForwardMode,
+    difficultyMode,
+    setDifficultyMode,
+  } = useGame();
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
@@ -129,15 +144,58 @@ export default function MainMenu() {
         {/* Settings toggle removed, now in menu grid */}
 
         {showSettings && (
-          <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-3 flex gap-4">
-            <button onClick={toggleMusic} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
-              {musicEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              Music {musicEnabled ? 'ON' : 'OFF'}
-            </button>
-            <button onClick={toggleSfx} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
-              {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              SFX {sfxEnabled ? 'ON' : 'OFF'}
-            </button>
+          <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-3 space-y-3 w-full max-w-xl">
+            <div className="flex gap-4">
+              <button onClick={toggleMusic} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
+                {musicEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                Music {musicEnabled ? 'ON' : 'OFF'}
+              </button>
+              <button onClick={toggleSfx} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
+                {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                SFX {sfxEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            <div className="text-white/70 text-xs font-bold">Run Forward Mode</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setRunForwardMode('manual')}
+                className={`rounded-lg py-2 text-sm font-bold transition-colors ${runForwardMode === 'manual' ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/10 text-white/70 hover:bg-white/15'}`}
+              >
+                Manual
+              </button>
+              <button
+                onClick={() => setRunForwardMode('automatic')}
+                className={`rounded-lg py-2 text-sm font-bold transition-colors ${runForwardMode === 'automatic' ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/10 text-white/70 hover:bg-white/15'}`}
+              >
+                Automatic
+              </button>
+            </div>
+
+            <div className="text-white/70 text-xs font-bold">Difficulty</div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setDifficultyMode('easy')}
+                className={`rounded-lg py-2 text-sm font-bold transition-colors ${difficultyMode === 'easy' ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/10 text-white/70 hover:bg-white/15'}`}
+              >
+                Easy
+              </button>
+              <button
+                onClick={() => setDifficultyMode('normal')}
+                className={`rounded-lg py-2 text-sm font-bold transition-colors ${difficultyMode === 'normal' ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/10 text-white/70 hover:bg-white/15'}`}
+              >
+                Normal
+              </button>
+              <button
+                onClick={() => setDifficultyMode('hard')}
+                className={`rounded-lg py-2 text-sm font-bold transition-colors ${difficultyMode === 'hard' ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/10 text-white/70 hover:bg-white/15'}`}
+              >
+                Hard
+              </button>
+            </div>
+            <div className="text-white/50 text-[11px]">
+              Manual mode needs held forward input. Automatic mode runs continuously.
+            </div>
           </div>
         )}
 
