@@ -1,7 +1,7 @@
 import {
   Platform, Collectible, Obstacle, Particle, BackgroundElement,
   PlayerState, GameState, Resources, BiomeType, PowerUpType, RunForwardMode, DifficultyMode,
-  GRAVITY, JUMP_FORCE, DOUBLE_JUMP_FORCE, GLIDE_GRAVITY,
+  GRAVITY, JUMP_FORCE, DOUBLE_JUMP_FORCE, GLIDE_GRAVITY, COYOTE_TIME_FRAMES, JUMP_BUFFER_FRAMES,
   BASE_SCROLL_SPEED, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT,
   CHECKPOINT_INTERVAL, POWERUP_DURATION, BIOME_COLORS, CHARACTER_COLORS,
   AvatarConfig, CraftRecipe, CRAFT_RECIPES, BiomeConfig,
@@ -120,6 +120,7 @@ export class GameEngine {
   coyoteTimer: number = 0;
   currentScrollSpeed: number = 0;
   difficultyManager: DifficultyManager = new DifficultyManager();
+  brakingDustTimer: number = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -153,6 +154,7 @@ export class GameEngine {
       activePowerUp: null, powerUpTimer: 0, invincible: false,
       bigMode: false, hasLeafWings: false, speedBoost: false, hasShield: false,
       trailColor: '#FFD700', squash: 1, stretch: 1,
+      braking: false,
     };
   }
 
@@ -261,6 +263,7 @@ export class GameEngine {
     this.currentScrollSpeed = this.runForwardMode === 'automatic' ? BASE_SCROLL_SPEED : 0;
     this.jumpBufferTimer = 0;
     this.coyoteTimer = 0;
+    this.brakingDustTimer = 0;
     this.moveRightHeld = this.runForwardMode === 'automatic';
     this.moveLeftHeld = false;
     this.seed = Math.random() * 10000;
@@ -295,6 +298,9 @@ export class GameEngine {
     this.runForwardMode = mode;
     localStorage.setItem('flo_runForwardMode', mode);
     this.moveRightHeld = mode === 'automatic';
+    if (mode === 'automatic' && this.player.vx < 0) {
+      this.player.vx *= 0.45;
+    }
   }
 
   setDifficultyMode(mode: DifficultyMode) {
@@ -304,6 +310,10 @@ export class GameEngine {
   }
 
   setForwardPressed(pressed: boolean) {
+    if (this.runForwardMode === 'automatic') {
+      this.moveRightHeld = true;
+      return;
+    }
     this.moveRightHeld = pressed;
   }
 
@@ -381,7 +391,8 @@ export class GameEngine {
     if (this.respawnTimer > 0) return;
     if (!this.state.isPlaying || this.state.isPaused) return;
     Audio.resumeAudio();
-    this.jumpBufferTimer = 8;
+    const tuning = this.difficultyManager.getTuning(this.state.distance);
+    this.jumpBufferTimer = Math.max(this.jumpBufferTimer, tuning.jumpBufferFrames || JUMP_BUFFER_FRAMES);
     this.tryConsumeJumpBuffer();
   }
 
@@ -585,26 +596,42 @@ export class GameEngine {
   updatePlayer(dt: number, difficulty: DifficultyTuning) {
     const p = this.player;
     if (this.jumpBufferTimer > 0) this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+    if (this.coyoteTimer > 0) this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    if (this.brakingDustTimer > 0) this.brakingDustTimer = Math.max(0, this.brakingDustTimer - dt);
 
     const forwardInput = this.runForwardMode === 'automatic' || this.moveRightHeld ? 1 : 0;
     const backwardInput = this.moveLeftHeld ? 1 : 0;
     let inputAxis = forwardInput - backwardInput;
     if (this.runForwardMode === 'automatic' && backwardInput > 0) {
-      inputAxis = -0.35;
+      inputAxis = -0.22;
     }
 
     const maxForwardSpeed = difficulty.playerMaxForwardSpeed;
     const maxBackwardSpeed = difficulty.playerMaxBackwardSpeed;
     const targetVx = inputAxis >= 0 ? inputAxis * maxForwardSpeed : inputAxis * maxBackwardSpeed;
-    const accel = p.grounded ? 0.55 : 0.22;
+    const accel = p.grounded ? difficulty.groundAccel : difficulty.airAccel;
     p.vx = approach(p.vx, targetVx, accel * dt);
 
-    const groundBrake = 0.9;
-    const airDrag = 0.06;
-    if (Math.abs(inputAxis) < 0.01) {
-      p.vx = approach(p.vx, 0, (p.grounded ? groundBrake : airDrag) * dt);
+    // Manual mode uses explicit braking/friction so releasing forward is responsive, not slippery.
+    const noForwardInput = this.runForwardMode === 'manual' && !this.moveRightHeld;
+    const opposingInput = this.moveLeftHeld && p.vx > 0.5;
+    const brakingNow = p.grounded && (noForwardInput || opposingInput) && p.vx > 0.35;
+    p.braking = brakingNow;
+
+    if (brakingNow) {
+      p.vx = approach(p.vx, 0, difficulty.brakingDecel * dt);
+      if (this.brakingDustTimer <= 0 && p.vx > 1.15) {
+        this.spawnParticles(p.x + 4, p.y + p.height - 2, 3, '#8B7355', 'dust');
+        this.brakingDustTimer = 5;
+      }
+      p.squash = Math.min(p.squash, 0.86);
+      p.stretch = Math.max(p.stretch, 1.1);
+    } else if (Math.abs(inputAxis) < 0.01) {
+      p.vx = approach(p.vx, 0, (p.grounded ? difficulty.groundFriction : difficulty.airDrag) * dt);
     }
     p.x += p.vx * dt;
+    if (p.vx > 0.15) p.facing = 1;
+    if (p.vx < -0.15) p.facing = -1;
 
     const grav = p.gliding ? GLIDE_GRAVITY : GRAVITY;
     p.vy += grav * dt;
@@ -645,9 +672,8 @@ export class GameEngine {
         }
       }
     }
-    if (!p.grounded && wasGrounded) this.coyoteTimer = 7;
-    if (!p.grounded && this.coyoteTimer > 0) this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
-    if (p.grounded) this.coyoteTimer = 7;
+    if (!p.grounded && wasGrounded) this.coyoteTimer = difficulty.coyoteTimeFrames || COYOTE_TIME_FRAMES;
+    if (p.grounded) this.coyoteTimer = difficulty.coyoteTimeFrames || COYOTE_TIME_FRAMES;
     this.tryConsumeJumpBuffer();
 
     // Fall off screen
@@ -848,8 +874,9 @@ export class GameEngine {
     const ahead = this.terrainX + CANVAS_WIDTH + 600;
 
     while (this.nextPlatformX < ahead) {
-      const maxSafeGap = Math.min(tuning.maxGroundGap, tuning.minGroundGap + 90 + this.state.speed * 6);
-      const gap = tuning.minGroundGap + this.random() * Math.max(12, maxSafeGap - tuning.minGroundGap);
+      const speedSafetyGap = tuning.minGroundGap + 84 + this.state.speed * 4.4;
+      const maxSafeGap = Math.min(tuning.maxSafeGroundGap, tuning.maxGroundGap, speedSafetyGap);
+      const gap = tuning.minGroundGap + this.random() * Math.max(10, maxSafeGap - tuning.minGroundGap);
       const w = tuning.minGroundWidth + this.random() * Math.max(20, tuning.maxGroundWidth - tuning.minGroundWidth);
       this.platforms.push({
         x: this.nextPlatformX + gap, y: GROUND_Y, width: w, height: 200,
@@ -868,9 +895,27 @@ export class GameEngine {
     }
 
     while (this.nextObstacleX < ahead) {
-      this.addObstacle(this.nextObstacleX, tuning);
-      this.nextObstacleX += tuning.obstacleSpacingMin + this.random() * Math.max(40, tuning.obstacleSpacingMax - tuning.obstacleSpacingMin);
+      // Obstacles only spawn on sufficiently wide ground segments to avoid impossible setups.
+      const ground = this.findGroundPlatformAt(this.nextObstacleX + 20, 120);
+      if (ground) {
+        const margin = 36;
+        const obstacleX = clamp(this.nextObstacleX, ground.x + margin, ground.x + ground.width - margin);
+        this.addObstacle(obstacleX, tuning);
+      } else {
+        this.nextObstacleX += 60;
+        continue;
+      }
+      this.nextObstacleX += tuning.obstacleSpacingMin + this.random() * Math.max(36, tuning.obstacleSpacingMax - tuning.obstacleSpacingMin);
     }
+  }
+
+  findGroundPlatformAt(x: number, minWidth: number = 0): Platform | null {
+    for (const platform of this.platforms) {
+      if (platform.type !== 'ground') continue;
+      if (platform.width < minWidth) continue;
+      if (x >= platform.x + 8 && x <= platform.x + platform.width - 8) return platform;
+    }
+    return null;
   }
 
   changeBiome(biome: BiomeType) {
@@ -1442,6 +1487,8 @@ export class GameEngine {
 
     ctx.save();
     ctx.translate(x + w / 2, y + h / 2);
+    const brakeTilt = p.braking ? -Math.min(0.16, Math.abs(p.vx) * 0.03) : 0;
+    if (brakeTilt !== 0) ctx.rotate(brakeTilt);
     ctx.scale(p.squash, p.stretch);
 
     const charColors = CHARACTER_COLORS[this.avatar.character] || CHARACTER_COLORS.fox;

@@ -95,6 +95,7 @@ export interface PlayerState {
   trailColor: string;
   squash: number;
   stretch: number;
+  braking?: boolean;
   // Custom properties
   invincibilityGraceDistance?: number;
   id?: string; // for multiplayer
@@ -185,6 +186,8 @@ export const GRAVITY = 0.6;
 export const JUMP_FORCE = -13;
 export const DOUBLE_JUMP_FORCE = -11;
 export const GLIDE_GRAVITY = 0.15;
+export const COYOTE_TIME_FRAMES = 7.2; // ~0.12s at 60fps
+export const JUMP_BUFFER_FRAMES = 6; // ~0.10s at 60fps
 export const PLAYER_SPEED = 0;
 export const BASE_SCROLL_SPEED = 4;
 export const MAX_SCROLL_SPEED = 8;
