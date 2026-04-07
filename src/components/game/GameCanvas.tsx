@@ -4,12 +4,14 @@ import { useGame } from '@/contexts/GameContext';
 
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { engine, avatar, updateGameState, setScreen } = useGame();
+  const { engine, avatar, updateGameState, setScreen, runForwardMode, difficultyMode } = useGame();
 
   useEffect(() => {
     if (!canvasRef.current) return;
     const ge = new GameEngine(canvasRef.current);
     ge.setAvatar(avatar);
+    ge.setRunForwardMode(runForwardMode);
+    ge.setDifficultyMode(difficultyMode);
     engine.current = ge;
 
     ge.onStateChange = (state) => {
@@ -34,6 +36,14 @@ export default function GameCanvas() {
     };
   }, []);
 
+  useEffect(() => {
+    engine.current?.setRunForwardMode(runForwardMode);
+  }, [engine, runForwardMode]);
+
+  useEffect(() => {
+    engine.current?.setDifficultyMode(difficultyMode);
+  }, [engine, difficultyMode]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -41,6 +51,14 @@ export default function GameCanvas() {
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         e.preventDefault();
         engine.current.jump();
+      }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        e.preventDefault();
+        engine.current.setForwardPressed(true);
+      }
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        e.preventDefault();
+        engine.current.setBackwardPressed(true);
       }
       if (e.code === 'Escape') {
         engine.current.pause();
@@ -51,6 +69,12 @@ export default function GameCanvas() {
       if (!engine.current) return;
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         engine.current.releaseJump();
+      }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+        engine.current.setForwardPressed(false);
+      }
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+        engine.current.setBackwardPressed(false);
       }
     };
 

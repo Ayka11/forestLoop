@@ -1,12 +1,20 @@
 import {
   Platform, Collectible, Obstacle, Particle, BackgroundElement,
-  PlayerState, GameState, Resources, BiomeType, PowerUpType,
+  PlayerState, GameState, Resources, BiomeType, PowerUpType, RunForwardMode, DifficultyMode,
   GRAVITY, JUMP_FORCE, DOUBLE_JUMP_FORCE, GLIDE_GRAVITY,
   BASE_SCROLL_SPEED, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT,
   CHECKPOINT_INTERVAL, POWERUP_DURATION, BIOME_COLORS, CHARACTER_COLORS,
-  AvatarConfig, CraftRecipe, CRAFT_RECIPES,
+  AvatarConfig, CraftRecipe, CRAFT_RECIPES, BiomeConfig,
 } from './types';
 import * as Audio from './audio';
+import { DifficultyManager, DifficultyTuning } from './DifficultyManager';
+
+const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+const approach = (current: number, target: number, delta: number) => {
+  if (current < target) return Math.min(current + delta, target);
+  if (current > target) return Math.max(current - delta, target);
+  return target;
+};
 
 // Polyfill for roundRect
 if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
@@ -104,6 +112,14 @@ export class GameEngine {
   cameraShake: number = 0;
   tutorialShown: boolean = false;
   respawnTimer: number = 0;
+  runForwardMode: RunForwardMode = 'manual';
+  difficultyMode: DifficultyMode = 'normal';
+  moveRightHeld: boolean = false;
+  moveLeftHeld: boolean = false;
+  jumpBufferTimer: number = 0;
+  coyoteTimer: number = 0;
+  currentScrollSpeed: number = 0;
+  difficultyManager: DifficultyManager = new DifficultyManager();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -116,6 +132,9 @@ export class GameEngine {
     this.player = this.createPlayer();
     this.state = this.createGameState();
     this.avatar = { character: 'fox', color: '#FF8C42', hat: null, accessory: null, pet: null, trail: null };
+    this.runForwardMode = (localStorage.getItem('flo_runForwardMode') as RunForwardMode) || 'manual';
+    this.difficultyMode = (localStorage.getItem('flo_difficultyMode') as DifficultyMode) || 'normal';
+    this.difficultyManager.setMode(this.difficultyMode);
 
     // Early-game invincibility grace period
     this.player.invincible = true;
@@ -127,7 +146,7 @@ export class GameEngine {
 
   createPlayer(): PlayerState {
     return {
-      x: 200, y: GROUND_Y - 40, vx: 0, vy: 0,
+      x: 180, y: GROUND_Y - 40, vx: 0, vy: 0,
       width: 32, height: 36, grounded: false, jumping: false,
       doubleJumped: false, wallKicking: false, gliding: false,
       facing: 1, animFrame: 0, animTimer: 0,
@@ -143,7 +162,7 @@ export class GameEngine {
       totalLeafTokens: parseInt(localStorage.getItem('flo_totalTokens') || '0'),
       resources: { wood: 0, stone: 0, flower: 0, leaf: 0 },
       combo: 0, comboTimer: 0, multiplier: 1, lives: 5, // Increased initial lives
-      checkpointDistance: 0, speed: BASE_SCROLL_SPEED, baseSpeed: BASE_SCROLL_SPEED,
+      checkpointDistance: 0, speed: 0, baseSpeed: BASE_SCROLL_SPEED,
       biome: 'enchanted', gameTime: 0, isPaused: false, isGameOver: false, isPlaying: false,
       dailyChallenge: null, achievements: JSON.parse(localStorage.getItem('flo_achievements') || '[]'),
       streak: parseInt(localStorage.getItem('flo_streak') || '0'),
@@ -239,6 +258,11 @@ export class GameEngine {
     this.nextCollectibleX = 300;
     this.nextObstacleX = 300; // Delay obstacle spawn for early-game safety
     this.terrainX = 0;
+    this.currentScrollSpeed = this.runForwardMode === 'automatic' ? BASE_SCROLL_SPEED : 0;
+    this.jumpBufferTimer = 0;
+    this.coyoteTimer = 0;
+    this.moveRightHeld = this.runForwardMode === 'automatic';
+    this.moveLeftHeld = false;
     this.seed = Math.random() * 10000;
     this.initBackground();
 
@@ -267,8 +291,29 @@ export class GameEngine {
     this.emitState();
   }
 
+  setRunForwardMode(mode: RunForwardMode) {
+    this.runForwardMode = mode;
+    localStorage.setItem('flo_runForwardMode', mode);
+    this.moveRightHeld = mode === 'automatic';
+  }
+
+  setDifficultyMode(mode: DifficultyMode) {
+    this.difficultyMode = mode;
+    this.difficultyManager.setMode(mode);
+    localStorage.setItem('flo_difficultyMode', mode);
+  }
+
+  setForwardPressed(pressed: boolean) {
+    this.moveRightHeld = pressed;
+  }
+
+  setBackwardPressed(pressed: boolean) {
+    this.moveLeftHeld = pressed;
+  }
+
   generateInitialTerrain() {
     const biome = BIOME_COLORS[this.state.biome];
+    const tuning = this.difficultyManager.getTuning(this.state.distance);
     // Update terrain/platform generation to use biome-specific assets and mechanics
     // Ground platforms
     for (let x = -100; x < CANVAS_WIDTH + 600; x += 200 + this.random() * 100) {
@@ -282,7 +327,7 @@ export class GameEngine {
     // Some floating platforms
     for (let i = 0; i < 5; i++) {
       const x = 400 + i * 300 + this.random() * 100;
-      this.addFloatingPlatform(x, biome);
+      this.addFloatingPlatform(x, biome, tuning);
     }
     // Initial collectibles
     for (let i = 0; i < 10; i++) {
@@ -290,7 +335,7 @@ export class GameEngine {
     }
   }
 
-  addFloatingPlatform(x: number, biome: any) {
+  addFloatingPlatform(x: number, biome: BiomeConfig, tuning: DifficultyTuning) {
     const types = biome.platforms || ['floating', 'mushroom', 'vine', 'log'];
     const type = types[Math.floor(this.random() * types.length)];
     const y = GROUND_Y - 100 - this.random() * 200;
@@ -302,12 +347,12 @@ export class GameEngine {
     this.platforms.push({
       x, y, width: w, height: type === 'mushroom' ? 20 : 16,
       type, color: colors[type] || biome.ground, bouncy: type === 'mushroom',
-      moving: this.random() > 0.7, moveRange: 40 + this.random() * 60,
-      moveSpeed: 0.5 + this.random() * 1.5, originalY: y,
+      moving: this.random() < tuning.movingPlatformChance, moveRange: 40 + this.random() * 60,
+      moveSpeed: tuning.movingPlatformSpeed * (0.8 + this.random() * 0.5), originalY: y,
     });
   }
 
-  addCollectible(x: number, biome: any) {
+  addCollectible(x: number, biome: BiomeConfig) {
     const types = biome.collectibles || ['wood', 'stone', 'flower', 'leaf', 'leafToken'];
     const type = types[Math.floor(this.random() * types.length)];
     const y = GROUND_Y - 60 - this.random() * 200;
@@ -317,16 +362,16 @@ export class GameEngine {
     });
   }
 
-  addObstacle(x: number) {
+  addObstacle(x: number, tuning: DifficultyTuning) {
     // Limit obstacle types based on distance for gradual difficulty
-    let allowedTypes: Obstacle['type'][] = ['slime'];
+    const allowedTypes: Obstacle['type'][] = ['slime'];
     if (this.state.distance > 1000) allowedTypes.push('bird');
     if (this.state.distance > 2000) allowedTypes.push('rollingLog');
     const type = allowedTypes[Math.floor(this.random() * allowedTypes.length)];
-    const y = type === 'bird' ? GROUND_Y - 120 - this.random() * 100 : GROUND_Y - 30;
+    const y = type === 'bird' ? GROUND_Y - 95 - this.random() * 70 : GROUND_Y - 30;
     this.obstacles.push({
       x, y, width: type === 'rollingLog' ? 50 : 36, height: type === 'rollingLog' ? 36 : 32,
-      type, speed: type === 'bird' ? 2 + this.random() * 2 : 1,
+      type, speed: (type === 'bird' ? 2 + this.random() * 2 : 1) * (0.8 + this.state.speed / Math.max(tuning.maxSpeed, 1)),
       bounceOffset: this.random() * Math.PI * 2, direction: -1,
     });
   }
@@ -336,11 +381,19 @@ export class GameEngine {
     if (this.respawnTimer > 0) return;
     if (!this.state.isPlaying || this.state.isPaused) return;
     Audio.resumeAudio();
+    this.jumpBufferTimer = 8;
+    this.tryConsumeJumpBuffer();
+  }
 
-    if (this.player.grounded) {
+  tryConsumeJumpBuffer() {
+    const p = this.player;
+    if (this.jumpBufferTimer <= 0) return;
+    if (p.grounded || this.coyoteTimer > 0) {
       this.player.vy = JUMP_FORCE * (this.player.bigMode ? 1.3 : 1);
       this.player.grounded = false;
       this.player.jumping = true;
+      this.coyoteTimer = 0;
+      this.jumpBufferTimer = 0;
       this.player.squash = 0.6;
       this.player.stretch = 1.4;
       Audio.playJump();
@@ -348,12 +401,14 @@ export class GameEngine {
     } else if (!this.player.doubleJumped) {
       this.player.vy = DOUBLE_JUMP_FORCE * (this.player.bigMode ? 1.2 : 1);
       this.player.doubleJumped = true;
+      this.jumpBufferTimer = 0;
       this.player.squash = 0.7;
       this.player.stretch = 1.3;
       Audio.playDoubleJump();
       this.spawnParticles(this.player.x, this.player.y + this.player.height, 8, '#FFD700', 'sparkle');
     } else if (this.player.hasLeafWings && !this.player.gliding) {
       this.player.gliding = true;
+      this.jumpBufferTimer = 0;
     }
   }
 
@@ -422,8 +477,23 @@ export class GameEngine {
       return;
     }
 
-    const speed = this.state.speed * dt;
+    const difficulty = this.difficultyManager.getTuning(this.state.distance);
     this.state.gameTime += dt;
+    this.updatePlayer(dt, difficulty);
+
+    const forwardSpeedRatio = clamp(this.player.vx / Math.max(difficulty.playerMaxForwardSpeed, 0.1), 0, 1);
+    const runFactor = this.runForwardMode === 'automatic' ? 1 : forwardSpeedRatio;
+    const targetSpeed = clamp(
+      difficulty.baseSpeed * (this.player.speedBoost ? 1.35 : 1) * runFactor,
+      0,
+      difficulty.maxSpeed
+    );
+    const speedSmoothing = targetSpeed >= this.currentScrollSpeed ? 0.16 : 0.32;
+    this.currentScrollSpeed = approach(this.currentScrollSpeed, targetSpeed, speedSmoothing * dt);
+    this.state.baseSpeed = difficulty.baseSpeed;
+    this.state.speed = this.currentScrollSpeed;
+
+    const speed = this.currentScrollSpeed * dt;
     this.state.distance += speed;
     this.state.score = Math.floor(this.state.distance) + this.state.leafTokens * 10;
     this.terrainX += speed;
@@ -432,14 +502,6 @@ export class GameEngine {
     if (this.player.invincible && this.state.distance > (this.player.invincibilityGraceDistance || 500)) {
       this.player.invincible = false;
     }
-
-    // Speed increase over time (slower ramp-up for first 1000m)
-    if (this.state.distance < 1000) {
-      this.state.speed = Math.min(this.state.baseSpeed + this.state.distance * 0.0002, 6);
-    } else {
-      this.state.speed = Math.min(this.state.baseSpeed + (this.state.distance - 1000) * 0.0005 + 0.2, 10);
-    }
-    if (this.player.speedBoost) this.state.speed *= 1.5;
 
     // Combo timer
     if (this.state.comboTimer > 0) {
@@ -477,13 +539,12 @@ export class GameEngine {
       this.onCheckpoint?.();
     }
 
-    this.updatePlayer(dt);
     this.updatePlatforms(speed);
     this.updateCollectibles(speed, dt);
     this.updateObstacles(speed, dt);
     this.updateParticles(dt);
     this.updateBackground(speed);
-    this.generateTerrain();
+    this.generateTerrain(difficulty);
 
     // Ambient particles
     if (this.frameCount % 10 === 0) {
@@ -521,8 +582,30 @@ export class GameEngine {
     if (this.frameCount % 5 === 0) this.emitState();
   }
 
-  updatePlayer(dt: number) {
+  updatePlayer(dt: number, difficulty: DifficultyTuning) {
     const p = this.player;
+    if (this.jumpBufferTimer > 0) this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+
+    const forwardInput = this.runForwardMode === 'automatic' || this.moveRightHeld ? 1 : 0;
+    const backwardInput = this.moveLeftHeld ? 1 : 0;
+    let inputAxis = forwardInput - backwardInput;
+    if (this.runForwardMode === 'automatic' && backwardInput > 0) {
+      inputAxis = -0.35;
+    }
+
+    const maxForwardSpeed = difficulty.playerMaxForwardSpeed;
+    const maxBackwardSpeed = difficulty.playerMaxBackwardSpeed;
+    const targetVx = inputAxis >= 0 ? inputAxis * maxForwardSpeed : inputAxis * maxBackwardSpeed;
+    const accel = p.grounded ? 0.55 : 0.22;
+    p.vx = approach(p.vx, targetVx, accel * dt);
+
+    const groundBrake = 0.9;
+    const airDrag = 0.06;
+    if (Math.abs(inputAxis) < 0.01) {
+      p.vx = approach(p.vx, 0, (p.grounded ? groundBrake : airDrag) * dt);
+    }
+    p.x += p.vx * dt;
+
     const grav = p.gliding ? GLIDE_GRAVITY : GRAVITY;
     p.vy += grav * dt;
     if (p.vy > 15) p.vy = 15;
@@ -540,6 +623,7 @@ export class GameEngine {
     }
 
     // Ground/platform collision
+    const wasGrounded = p.grounded;
     p.grounded = false;
     const allPlatforms = [...this.platforms, ...this.craftedItems];
     for (const plat of allPlatforms) {
@@ -548,6 +632,7 @@ export class GameEngine {
           p.y = plat.y - p.height;
           p.vy = 0;
           p.grounded = true;
+          p.jumping = false;
           p.doubleJumped = false;
           p.gliding = false;
           if (plat.bouncy) {
@@ -560,6 +645,10 @@ export class GameEngine {
         }
       }
     }
+    if (!p.grounded && wasGrounded) this.coyoteTimer = 7;
+    if (!p.grounded && this.coyoteTimer > 0) this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    if (p.grounded) this.coyoteTimer = 7;
+    this.tryConsumeJumpBuffer();
 
     // Fall off screen
     if (p.y > CANVAS_HEIGHT + 50) {
@@ -567,8 +656,14 @@ export class GameEngine {
     }
 
     // Keep player in horizontal bounds
-    if (p.x < 50) p.x = 50;
-    if (p.x > CANVAS_WIDTH * 0.4) p.x = CANVAS_WIDTH * 0.4;
+    if (p.x < 50) {
+      p.x = 50;
+      p.vx = Math.max(0, p.vx);
+    }
+    if (p.x > CANVAS_WIDTH * 0.4) {
+      p.x = CANVAS_WIDTH * 0.4;
+      p.vx = Math.min(0, p.vx);
+    }
   }
 
   checkPlatformCollision(p: PlayerState, plat: Platform): boolean {
@@ -716,7 +811,10 @@ export class GameEngine {
 
     // Respawn at checkpoint
     this.player.y = GROUND_Y - 100;
+    this.player.vx = 0;
     this.player.vy = 0;
+    this.jumpBufferTimer = 0;
+    this.coyoteTimer = 0;
     this.player.invincible = true;
     this.respawnTimer = 60;
     setTimeout(() => { this.player.invincible = false; }, 2000);
@@ -746,19 +844,20 @@ export class GameEngine {
     }
   }
 
-  generateTerrain() {
+  generateTerrain(tuning: DifficultyTuning) {
     const ahead = this.terrainX + CANVAS_WIDTH + 600;
 
     while (this.nextPlatformX < ahead) {
-      const gap = 60 + this.random() * 140;
-      const w = 150 + this.random() * 300;
+      const maxSafeGap = Math.min(tuning.maxGroundGap, tuning.minGroundGap + 90 + this.state.speed * 6);
+      const gap = tuning.minGroundGap + this.random() * Math.max(12, maxSafeGap - tuning.minGroundGap);
+      const w = tuning.minGroundWidth + this.random() * Math.max(20, tuning.maxGroundWidth - tuning.minGroundWidth);
       this.platforms.push({
         x: this.nextPlatformX + gap, y: GROUND_Y, width: w, height: 200,
         type: 'ground', color: BIOME_COLORS[this.state.biome].ground,
       });
       // Add floating platforms above
-      if (this.random() > 0.4) {
-        this.addFloatingPlatform(this.nextPlatformX + gap + this.random() * w, BIOME_COLORS[this.state.biome]);
+      if (this.random() < tuning.floatingPlatformChance) {
+        this.addFloatingPlatform(this.nextPlatformX + gap + this.random() * w, BIOME_COLORS[this.state.biome], tuning);
       }
       this.nextPlatformX += gap + w;
     }
@@ -769,8 +868,8 @@ export class GameEngine {
     }
 
     while (this.nextObstacleX < ahead) {
-      this.addObstacle(this.nextObstacleX);
-      this.nextObstacleX += 400 + this.random() * 600;
+      this.addObstacle(this.nextObstacleX, tuning);
+      this.nextObstacleX += tuning.obstacleSpacingMin + this.random() * Math.max(40, tuning.obstacleSpacingMax - tuning.obstacleSpacingMin);
     }
   }
 

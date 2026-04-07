@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { GameState, Resources, AvatarConfig, ShopItem, DailyChallenge } from '@/game/types';
+import { GameState, Resources, AvatarConfig, ShopItem, DailyChallenge, RunForwardMode, DifficultyMode } from '@/game/types';
 import { GameEngine } from '@/game/engine';
 
 export type ScreenType = 'menu' | 'playing' | 'paused' | 'gameover' | 'shop' | 'avatar' | 'achievements' | 'crafting' | 'daily' | 'leaderboard';
@@ -22,6 +22,10 @@ interface GameContextType {
   highScore: number;
   musicEnabled: boolean;
   sfxEnabled: boolean;
+  runForwardMode: RunForwardMode;
+  setRunForwardMode: (mode: RunForwardMode) => void;
+  difficultyMode: DifficultyMode;
+  setDifficultyMode: (mode: DifficultyMode) => void;
   toggleMusic: () => void;
   toggleSfx: () => void;
   updateGameState: (state: GameState) => void;
@@ -71,6 +75,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [equippedItems, setEquippedItems] = useState<string[]>(() => JSON.parse(localStorage.getItem('flo_equipped') || '[]'));
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [runForwardMode, setRunForwardModeState] = useState<RunForwardMode>(() => (localStorage.getItem('flo_runForwardMode') as RunForwardMode) || 'manual');
+  const [difficultyMode, setDifficultyModeState] = useState<DifficultyMode>(() => (localStorage.getItem('flo_difficultyMode') as DifficultyMode) || 'normal');
   const [dailyChallenges] = useState(DEFAULT_CHALLENGES);
   const engineRef = useRef<GameEngine | null>(null);
 
@@ -124,13 +130,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const toggleMusic = useCallback(() => setMusicEnabled(p => !p), []);
   const toggleSfx = useCallback(() => setSfxEnabled(p => !p), []);
+  const setRunForwardMode = useCallback((mode: RunForwardMode) => {
+    setRunForwardModeState(mode);
+    localStorage.setItem('flo_runForwardMode', mode);
+    engineRef.current?.setRunForwardMode(mode);
+  }, []);
+  const setDifficultyMode = useCallback((mode: DifficultyMode) => {
+    setDifficultyModeState(mode);
+    localStorage.setItem('flo_difficultyMode', mode);
+    engineRef.current?.setDifficultyMode(mode);
+  }, []);
 
   return (
     <GameContext.Provider value={{
       gameState, engine: engineRef, screen, setScreen,
       avatar, setAvatar: saveAvatar, shopItems, ownedItems, equippedItems,
       buyItem, equipItem, dailyChallenges, totalTokens, setTotalTokens,
-      highScore, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, updateGameState,
+      highScore, musicEnabled, sfxEnabled, runForwardMode, setRunForwardMode,
+      difficultyMode, setDifficultyMode, toggleMusic, toggleSfx, updateGameState,
     }}>
       {children}
     </GameContext.Provider>
