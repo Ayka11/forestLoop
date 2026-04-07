@@ -100,6 +100,9 @@ export interface PlayerState {
   id?: string; // for multiplayer
 }
 
+export type RunForwardMode = 'manual' | 'automatic';
+export type DifficultyMode = 'easy' | 'normal' | 'hard';
+
 export type PowerUpType = 'mushroom' | 'star' | 'fireFlower' | 'leafWings' | 'speedBoots' | 'shield';
 
 export interface GameState {
