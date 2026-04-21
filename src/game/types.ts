@@ -104,6 +104,9 @@ export interface PlayerState {
   wallKicking: boolean;
   gliding: boolean;
   facing: 1 | -1;
+  jumpBufferTime: number; // Time to buffer jump input
+  coyoteTime: number; // Time after leaving platform for jump buffering
+  lastGroundedTime: number; // Track when player was last grounded
   animFrame: number;
   animTimer: number;
   // Power-ups
@@ -132,8 +135,6 @@ export interface PlayerState {
   invincibilityGraceDistance?: number;
   id?: string; // for multiplayer
   jumpHoldTime: number;
-  coyoteTime: number;
-  jumpBufferTime: number;
   rampBoostTime: number;
   lastRampSpeed: number;
 }
@@ -235,6 +236,8 @@ export const GRAVITY = 0.4;
 export const JUMP_FORCE = -13;
 export const DOUBLE_JUMP_FORCE = -11;
 export const GLIDE_GRAVITY = 0.15;
+export const COYOTE_TIME = 0.12; // 120ms window after leaving platform
+export const JUMP_BUFFER_TIME = 0.15; // 150ms input buffer
 export const PLAYER_SPEED = 0;
 export const BASE_SCROLL_SPEED = 4;
 export const MAX_SCROLL_SPEED = 8;
@@ -243,8 +246,6 @@ export const CANVAS_WIDTH = 1200;
 export const CANVAS_HEIGHT = 700;
 export const CHECKPOINT_INTERVAL = 2000;
 export const POWERUP_DURATION = 600;
-export const COYOTE_TIME = 0.12;
-export const JUMP_BUFFER_TIME = 0.15;
 
 export interface BiomeConfig {
   sky?: string[];

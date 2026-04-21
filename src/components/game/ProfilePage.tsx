@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { getPlayer, updatePlayer } from '@/lib/supabase';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function ProfilePage({ playerId }) {
   const [profile, setProfile] = useState(null);
@@ -29,15 +28,7 @@ export default function ProfilePage({ playerId }) {
   return (
     <div className="p-6 max-w-xl mx-auto">
       <h2 className="text-2xl font-bold mb-4">Player Profile</h2>
-      {/* Avatar Customizer embedded here */}
-      <div className="mb-6">
-        <span className="font-semibold">Avatar Customization:</span>
-        <div className="mt-2">
-          {/* AvatarCustomizer component */}
-          <AvatarCustomizer />
-        </div>
-      </div>
-      <div className="mb-4">
+            <div className="mb-4">
         <span className="font-semibold">Display Name:</span>
         <input value={editName} onChange={e => setEditName(e.target.value)} className="ml-2 border px-2" />
         <button onClick={handleSave} className="ml-2 btn btn-sm">Save</button>
@@ -80,14 +71,20 @@ export default function ProfilePage({ playerId }) {
       </div>
       <div className="mb-4">
         <span className="font-semibold">Last 10 Scores:</span>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={scoreData}>
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="score" fill="#8884d8" />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="mt-2 p-2 bg-gray-100 rounded">
+          {scoreData.length > 0 ? (
+            <div className="text-sm">
+              {scoreData.map((score, idx) => (
+                <div key={idx} className="flex justify-between py-1">
+                  <span>Run {idx + 1}:</span>
+                  <span className="font-mono">{score.score || 0}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm">No recent scores</div>
+          )}
+        </div>
       </div>
     </div>
   );

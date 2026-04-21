@@ -5,6 +5,7 @@ import {
   BASE_SCROLL_SPEED, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT,
   CHECKPOINT_INTERVAL, POWERUP_DURATION, BIOME_COLORS, CHARACTER_COLORS,
   AvatarConfig, CraftRecipe, CRAFT_RECIPES, DailyChallenge,
+  COYOTE_TIME, JUMP_BUFFER_TIME,
 } from './types';
 import * as Audio from './audio';
 
@@ -48,6 +49,124 @@ export interface SavedRun {
 }
 
 export class GameEngine {
+    updateLevelProgression(dt: number): void {
+      // Track total distance for progression
+      this.state.totalDistance += this.player.vx * dt;
+      if (this.state.totalDistance > this.state.maxDistance) {
+        this.state.maxDistance = this.state.totalDistance;
+      }
+
+      // Level progression based on distance milestones
+      const previousLevel = this.state.currentLevel;
+      if (this.state.totalDistance >= 100 && previousLevel === 1) {
+        this.state.currentLevel = 2;
+        this.onLevelUp?.(2);
+        // Level 1→2: Green upward burst + "LEVEL UP!"
+        this.spawnLevelUpEffect(2, '#00FF00', 'upward');
+        this.cameraShake = 5;
+      } else if (this.state.totalDistance >= 300 && previousLevel === 2) {
+        this.state.currentLevel = 3;
+        this.onLevelUp?.(3);
+        // Level 2→3: Blue swirls + horizontal sweep + "ADVANCED!"
+        this.spawnLevelUpEffect(3, '#00BFFF', 'horizontal');
+        this.cameraShake = 6;
+      } else if (this.state.totalDistance >= 600 && previousLevel === 3) {
+        this.state.currentLevel = 4;
+        this.onLevelUp?.(4);
+        // Level 3→4: Purple explosion + screen flash + "MASTER!"
+        this.spawnLevelUpEffect(4, '#FF00FF', 'explosion');
+        this.cameraShake = 7;
+      }
+      
+      // Dynamic difficulty scaling based on level
+      const levelDifficulty = Math.min(1.5, 0.5 + (this.state.currentLevel - 1) * 0.25);
+      // Apply level-based scaling to terrain generation
+      // This will be used in generateTerrain() method
+    }
+
+    spawnLevelUpEffect(level: number, color: string, pattern: 'upward' | 'horizontal' | 'explosion' | 'rainbow') {
+      const x = this.player.x;
+      const y = this.player.y;
+      
+      switch (pattern) {
+        case 'upward':
+          // Level 1→2: Green upward burst
+          for (let i = 0; i < 40; i++) {
+            const angle = (Math.PI * 2 * i) / 40;
+            const speed = 3 + Math.random() * 4;
+            this.particles.push({
+              x, y,
+              vx: Math.cos(angle) * speed,
+              vy: -Math.abs(Math.sin(angle)) * speed - 2,
+              life: 40 + Math.random() * 20,
+              maxLife: 60,
+              color,
+              size: 2 + Math.random() * 4,
+              type: 'sparkle',
+            });
+          }
+          break;
+          
+        case 'horizontal':
+          // Level 2→3: Blue horizontal sweep
+          for (let i = 0; i < 50; i++) {
+            const offset = (i - 25) * 8;
+            this.particles.push({
+              x: x + offset,
+              y: y + Math.sin(offset * 0.1) * 30,
+              vx: Math.sign(offset) * 2,
+              vy: Math.cos(offset * 0.05) * 2,
+              life: 50 + Math.random() * 30,
+              maxLife: 80,
+              color,
+              size: 3 + Math.random() * 3,
+              type: 'sparkle',
+            });
+          }
+          break;
+          
+        case 'explosion':
+          // Level 3→4: Purple explosion + screen flash
+          for (let i = 0; i < 60; i++) {
+            const angle = (Math.PI * 2 * i) / 60;
+            const speed = 5 + Math.random() * 6;
+            this.particles.push({
+              x, y,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              life: 30 + Math.random() * 40,
+              maxLife: 70,
+              color,
+              size: 4 + Math.random() * 4,
+              type: 'sparkle',
+            });
+          }
+          // Add screen flash effect
+          this.cameraShake = 10;
+          break;
+          
+        case 'rainbow':
+          // Level 4+: Rainbow cascade
+          const rainbowColors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
+          for (let i = 0; i < 80; i++) {
+            const colorIndex = i % rainbowColors.length;
+            const angle = (Math.PI * 2 * i) / 80;
+            const speed = 2 + Math.random() * 8;
+            this.particles.push({
+              x, y,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 3,
+              life: 60 + Math.random() * 60,
+              maxLife: 120,
+              color: rainbowColors[colorIndex],
+              size: 3 + Math.random() * 5,
+              type: 'sparkle',
+            });
+          }
+          this.cameraShake = 12;
+          break;
+      }
+    }
     // ...existing code...
     loadLevel(levelIndex: number) {
       const level = levels[levelIndex];
@@ -112,6 +231,8 @@ export class GameEngine {
   onGameOver: (() => void) | null = null;
   onCheckpoint: (() => void) | null = null;
   onLevelUp: ((level: number) => void) | null = null;
+  showEducationOverlay: ((item: string, position: { x: number; y: number }) => void) | null = null;
+  hideEducationOverlay: (() => void) | null = null;
 
   // Internal
   animationId: number = 0;
@@ -136,6 +257,7 @@ export class GameEngine {
   jumpCount: number = 0;
   gameTime: number = 0; // Track total game time for time-based challenges
   challengeUpdater: ((type: DailyChallenge['type'], amount: number) => void) | null = null;
+  floatingPlatformChance: number = 0.55;
   hazards: Hazard[] = [];
   jumpHeld: boolean = false;
   jumpHoldTime: number = 0;
@@ -166,6 +288,7 @@ export class GameEngine {
       width: 32, height: 36, grounded: false, jumping: false,
       doubleJumped: false, wallKicking: false, gliding: false,
       facing: 1, animFrame: 0, animTimer: 0,
+      jumpBufferTime: 0, coyoteTime: 0, lastGroundedTime: performance.now() / 1000,
       activePowerUp: null, powerUpTimer: 0, invincible: false,
       bigMode: false, hasLeafWings: false, speedBoost: false, hasShield: false,
       timeSlowActive: false, magnetActive: false, doubleJumpAvailable: false, ghostPhaseActive: false,
@@ -176,8 +299,6 @@ export class GameEngine {
       dashCooldown: 0,
       trailColor: '#FFD700', squash: 1, stretch: 1,
       jumpHoldTime: 0,
-      coyoteTime: 0,
-      jumpBufferTime: 0,
       rampBoostTime: 0,
       lastRampSpeed: 0,
       finalBoost: 0,
@@ -316,7 +437,12 @@ export class GameEngine {
   jumpPress() {
     this.jumpHeld = true;
     this.jumpHoldTime = 0;
-    this.jump();
+    
+    // Jump buffering - allow jump input slightly before landing
+    if (this.player.jumpBufferTime <= 0) {
+      this.player.jumpBufferTime = JUMP_BUFFER_TIME;
+      this.jump();
+    }
   }
 
   resume() {
@@ -501,7 +627,7 @@ export class GameEngine {
 
   addObstacle(x: number) {
     // Enhanced difficulty scaling based on level and distance
-    const levelMultiplier = Math.max(1, this.currentLevel);
+    const levelMultiplier = Math.min(1, this.currentLevel);
     let allowedTypes: Obstacle['type'][] = ['slime'];
     
     // Progressive enemy unlocking based on distance and level
@@ -578,14 +704,25 @@ export class GameEngine {
     if (!this.state.isPlaying || this.state.isPaused) return;
     Audio.resumeAudio();
 
-    if (this.player.grounded) {
-      this.player.vy = JUMP_FORCE * (this.player.bigMode ? 1.3 : 1);
+    // Dynamic jump force based on level
+    const levelMultiplier = 1 + (this.state.currentLevel - 1) * 0.1; // 10% increase per level
+    const jumpForce = JUMP_FORCE * levelMultiplier;
+
+    // Check for coyote time (jump slightly after leaving platform)
+    const timeSinceGrounded = performance.now() / 1000 - this.player.lastGroundedTime;
+    const canCoyoteJump = !this.player.grounded && timeSinceGrounded < COYOTE_TIME;
+
+    if (this.player.grounded || canCoyoteJump) {
+      this.player.vy = jumpForce * (this.player.bigMode ? 1.3 : 1);
       this.player.grounded = false;
       this.player.jumping = true;
       this.player.squash = 0.6;
       this.player.stretch = 1.4;
+      this.player.lastGroundedTime = performance.now() / 1000; // Update last grounded time
       Audio.playJump();
       this.spawnParticles(this.player.x, this.player.y + this.player.height, 5, '#8B7355', 'dust');
+      this.jumpCount++;
+      this.challengeUpdater?.('jump', 1);
     } else if (!this.player.doubleJumped) {
       this.player.vy = DOUBLE_JUMP_FORCE * (this.player.bigMode ? 1.2 : 1);
       this.player.doubleJumped = true;
@@ -880,6 +1017,17 @@ export class GameEngine {
       p.vx += Math.sign(targetVx - p.vx) * Math.min(Math.abs(targetVx - p.vx), accel * dt);
     }
 
+    // Update jump buffer and coyote time
+    if (p.jumpBufferTime > 0) {
+      p.jumpBufferTime -= dt;
+    }
+    if (!p.grounded) {
+      p.coyoteTime += dt;
+    } else {
+      p.coyoteTime = 0;
+      p.lastGroundedTime = performance.now() / 1000;
+    }
+
     // Gravity + jump hold
     const effectiveGravity = p.gliding ? GLIDE_GRAVITY : GRAVITY;
     if (this.jumpHeld && p.vy < 0 && this.jumpHoldTime < 0.22) {
@@ -1060,6 +1208,9 @@ export class GameEngine {
 
     this.challengeUpdater?.('collect', 1);
 
+    // Show educational overlay if enabled
+    this.showEducationOverlay?.(c.type, { x: this.player.x, y: this.player.y });
+
     const colors: Record<string, string> = {
       wood: '#8D6E63', stone: '#90A4AE', flower: '#FF69B4', leaf: '#4CAF50',
       leafToken: '#FFD700', mushroom_powerup: '#FF6B6B', star: '#FFD700',
@@ -1088,6 +1239,9 @@ export class GameEngine {
 
     // Enhanced visual feedback for power-up activation
     this.spawnParticles(this.player.x, this.player.y, 12, '#FFD700', 'powerUpAura');
+    
+    // Show educational overlay for power-up activation
+    this.showEducationOverlay?.(type, { x: this.player.x, y: this.player.y });
     this.cameraShake = 3;
   }
 
@@ -1206,30 +1360,48 @@ export class GameEngine {
     const difficulty = Math.min(1, this.state.distance / 12000); // Faster difficulty for variety
     
     while (this.nextPlatformX < ahead) {
+      // Level-based gap limits
+      let maxGap = 55; // Default max gap
+      let floatingPlatformChance = 0.6;
+      
+      if (this.state.currentLevel === 1) {
+        // Level 1: Easier gaps for beginners
+        maxGap = 35; // Reduce max gap to 35
+        floatingPlatformChance = 0.8; // More floating platforms
+      } else if (this.state.currentLevel === 2) {
+        // Level 2: Moderate difficulty
+        maxGap = 45; // Moderate max gap
+        floatingPlatformChance = 0.6;
+      } else if (this.state.currentLevel >= 3) {
+        // Level 3+: Full difficulty
+        maxGap = 55; // Full max gap
+        floatingPlatformChance = 0.4; // Fewer floating platforms
+      }
+      
       // Structured gap system: small (easy), medium (normal), large (challenge)
       const gapRoll = this.random();
       let safeGap: number;
       let platformWidth: number;
       
       if (gapRoll < 0.55) {
-        // 55% small gaps - easily walkable/jumpable (0-25 units)
+        // 55% small gaps - easily walkable/jumpable
         safeGap = 10 + this.random() * 15;
         platformWidth = 180 + this.random() * 100;
       } else if (gapRoll < 0.85) {
-        // 30% medium gaps - require a jump (25-45 units)
+        // 30% medium gaps - require a jump
         safeGap = 25 + this.random() * 20;
         platformWidth = 150 + this.random() * 80;
       } else {
-        // 15% large gaps - require run+jump or are near floating platforms (45-55 units)
+        // 15% large gaps - require run+jump or are near floating platforms
         safeGap = 45 + this.random() * 10;
         platformWidth = 140 + this.random() * 60;
       }
       
-      // Absolute cap - no gap larger than 55 ever
-      safeGap = Math.min(safeGap, 55);
+      // Apply level-based cap
+      safeGap = Math.min(safeGap, maxGap);
 
-      // Always add a floating platform near larger gaps to help the player
-      if (safeGap > 35) {
+      // Always add floating platforms based on level and gap size
+      if (safeGap > 25 || this.random() < floatingPlatformChance) {
         this.addFloatingPlatform(
           this.nextPlatformX + safeGap * 0.5,
           BIOME_COLORS[this.state.biome]

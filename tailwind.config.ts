@@ -11,6 +11,26 @@ export default {
     "./src/**/*.{ts,tsx}",
   ],
   prefix: "",
+  // Optimize CSS generation
+  safelist: [
+    // Keep dynamic classes that might be purged
+    'bg-blue-500/80',
+    'bg-purple-500/80',
+    'bg-orange-500/80',
+    'bg-gray-700/80',
+    'text-white/40',
+    'text-white/60',
+    'text-white/80',
+    'border-white/30',
+    'border-white/40',
+    'border-white/60',
+    'border-blue-400',
+    'border-purple-400',
+    'border-orange-400',
+    'border-gray-600',
+    'backdrop-blur-sm',
+    'active:bg-blue-600/80',
+  ],
   theme: {
     container: {
       center: true,

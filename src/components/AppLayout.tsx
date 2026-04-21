@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { GameProvider, useGame } from '@/contexts/GameContext';
 import GameCanvas from '@/components/game/GameCanvas';
 import GameHUD from '@/components/game/GameHUD';
-import MainMenu from '@/components/game/MainMenu';
-import ShopModal from '@/components/game/ShopModal';
-import AvatarCustomizer from '@/components/game/AvatarCustomizer';
-import CraftingPanel from '@/components/game/CraftingPanel';
-import GameOverScreen from '@/components/game/GameOverScreen';
-import PauseMenu from '@/components/game/PauseMenu';
-import AchievementsModal from '@/components/game/AchievementsModal';
-import DailyChallenges from '@/components/game/DailyChallenges';
-import Leaderboard from '@/components/game/Leaderboard';
+
+// Lazy load heavy components
+const MainMenu = lazy(() => import('@/components/game/MainMenu'));
+const ShopModal = lazy(() => import('@/components/game/ShopModal'));
+const AvatarCustomizer = lazy(() => import('@/components/game/AvatarCustomizer'));
+const CraftingPanel = lazy(() => import('@/components/game/CraftingPanel'));
+const GameOverScreen = lazy(() => import('@/components/game/GameOverScreen'));
+const PauseMenu = lazy(() => import('@/components/game/PauseMenu'));
+const AchievementsModal = lazy(() => import('@/components/game/AchievementsModal'));
+const DailyChallenges = lazy(() => import('@/components/game/DailyChallenges'));
+const Leaderboard = lazy(() => import('@/components/game/Leaderboard'));
 
 function GameApp() {
   const { screen } = useGame();
@@ -24,16 +26,52 @@ function GameApp() {
       </div>
 
       {/* UI Overlays */}
-      {screen === 'menu' && <MainMenu />}
+      {screen === 'menu' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <MainMenu />
+        </Suspense>
+      )}
       {isInGame && <GameHUD />}
-      {screen === 'paused' && <PauseMenu />}
-      {screen === 'gameover' && <GameOverScreen />}
-      {screen === 'crafting' && <CraftingPanel />}
-      {screen === 'shop' && <ShopModal />}
-      {screen === 'avatar' && <AvatarCustomizer />}
-      {screen === 'achievements' && <AchievementsModal />}
-      {screen === 'daily' && <DailyChallenges />}
-      {screen === 'leaderboard' && <Leaderboard />}
+      {screen === 'paused' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <PauseMenu />
+        </Suspense>
+      )}
+      {screen === 'gameover' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <GameOverScreen />
+        </Suspense>
+      )}
+      {screen === 'crafting' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <CraftingPanel />
+        </Suspense>
+      )}
+      {screen === 'shop' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <ShopModal />
+        </Suspense>
+      )}
+      {screen === 'avatar' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <AvatarCustomizer />
+        </Suspense>
+      )}
+      {screen === 'achievements' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <AchievementsModal />
+        </Suspense>
+      )}
+      {screen === 'daily' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <DailyChallenges />
+        </Suspense>
+      )}
+      {screen === 'leaderboard' && (
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="text-white">Loading...</div></div>}>
+          <Leaderboard />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { GameEngine } from '@/game/engine';
 import { DailyChallenge, CANVAS_WIDTH, CANVAS_HEIGHT } from '@/game/types';
 import { useGame } from '@/contexts/GameContext';
 import EducationOverlay from './EducationOverlay';
+import TouchControls from './TouchControls';
+import LevelUpToast from './LevelUpToast';
 
 export default function GameCanvas() {
   const [isLandscape, setIsLandscape] = useState(() => {
@@ -15,6 +17,14 @@ export default function GameCanvas() {
   const challengeProgressRef = useRef(updateChallengeProgress);
   const updateGameStateRef = useRef(updateGameState);
   const setScreenRef = useRef(setScreen);
+  
+  // Level-up toast state
+  const [levelUpToast, setLevelUpToast] = useState({
+    visible: false,
+    level: 1,
+    message: '',
+    color: '#00FF00'
+  });
   const saveProgressRef = useRef(saveProgress);
   const showCheckpointToastRef = useRef(showCheckpointToast);
   const clearSavedProgressRef = useRef(clearSavedProgress);
@@ -46,6 +56,31 @@ export default function GameCanvas() {
 
     ge.onGameOver = () => {
       setScreenRef.current?.('gameover');
+    };
+
+    ge.onLevelUp = (level: number) => {
+      const levelConfig = {
+        2: { message: 'LEVEL UP!', color: '#00FF00' },
+        3: { message: 'ADVANCED!', color: '#00BFFF' },
+        4: { message: 'MASTER!', color: '#FF00FF' },
+        5: { message: 'LEGENDARY!', color: '#FFD700' }
+      };
+      
+      const config = levelConfig[level as keyof typeof levelConfig] || levelConfig[2];
+      setLevelUpToast({
+        visible: true,
+        level,
+        message: config.message,
+        color: config.color
+      });
+    };
+
+    ge.showEducationOverlay = (item: string, position: { x: number; y: number }) => {
+      showEducationOverlay(item, position);
+    };
+
+    ge.hideEducationOverlay = () => {
+      hideEducationOverlay();
     };
 
     ge.setMovementMode('idle');
@@ -185,7 +220,7 @@ export default function GameCanvas() {
     };
   }, []);
 
-  // Touch controls
+  // Enhanced touch controls
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     engine.current?.jumpPress();
@@ -204,6 +239,32 @@ export default function GameCanvas() {
     engine.current?.releaseJump();
   }, []);
 
+  // Touch control callbacks
+  const handleMoveLeft = useCallback((e?: React.TouchEvent) => {
+    e?.preventDefault();
+    engine.current?.setMovementMode('reverse');
+  }, []);
+
+  const handleMoveRight = useCallback((e?: React.TouchEvent) => {
+    e?.preventDefault();
+    engine.current?.setMovementMode('walk');
+  }, []);
+
+  const handleStopMoving = useCallback((e?: React.TouchEvent) => {
+    e?.preventDefault();
+    engine.current?.setMovementMode('idle');
+  }, []);
+
+  const handleTouchJump = useCallback((e?: React.TouchEvent) => {
+    e?.preventDefault();
+    engine.current?.jumpPress();
+  }, []);
+
+  const handleTouchRelease = useCallback((e?: React.TouchEvent) => {
+    e?.preventDefault();
+    engine.current?.releaseJump();
+  }, []);
+
   return (
     <div className="relative w-full h-full flex items-center justify-center">
       <canvas
@@ -217,13 +278,27 @@ export default function GameCanvas() {
       />
       {!isLandscape && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 text-white text-center px-6">
-          For the best experience, rotate your device to landscape (width/height ratio &gt; 1.2).
+          For the best experience, please rotate your device to landscape mode.
         </div>
       )}
       <EducationOverlay
         visible={educationOverlay.visible}
         item={educationOverlay.item}
         position={educationOverlay.position}
+      />
+      <TouchControls
+        onMoveLeft={handleMoveLeft}
+        onMoveRight={handleMoveRight}
+        onJump={handleTouchJump}
+        onStopMoving={handleStopMoving}
+        onReleaseJump={handleTouchRelease}
+      />
+      <LevelUpToast
+        visible={levelUpToast.visible}
+        level={levelUpToast.level}
+        message={levelUpToast.message}
+        color={levelUpToast.color}
+        onComplete={() => setLevelUpToast(prev => ({ ...prev, visible: false }))}
       />
     </div>
   );

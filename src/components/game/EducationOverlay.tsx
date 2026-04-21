@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { X, Info, Sparkles, Shield, Zap } from 'lucide-react';
 
@@ -53,8 +53,27 @@ interface EducationOverlayProps {
 
 export default function EducationOverlay({ visible, item, position }: EducationOverlayProps) {
   const { educationEnabled } = useGame();
+  const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
   
   if (!educationEnabled || !visible) return null;
+
+  // Auto-hide after 3 seconds
+  useEffect(() => {
+    if (visible) {
+      if (autoHideTimer) clearTimeout(autoHideTimer);
+      const timer = setTimeout(() => {
+        // This will be handled by parent component
+      }, 3000);
+      setAutoHideTimer(timer);
+    }
+    
+    return () => {
+      if (autoHideTimer) {
+        clearTimeout(autoHideTimer);
+        setAutoHideTimer(null);
+      }
+    };
+  }, [visible]);
   
   const content = EDUCATION_CONTENT[item as keyof typeof EDUCATION_CONTENT];
   

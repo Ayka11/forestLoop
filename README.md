@@ -149,6 +149,21 @@ The game includes an optional educational system that can be toggled on/off in t
 
 Enable education in Settings → Edu to learn about game mechanics, or disable it for a clean experience.
 
+1. Level Progression System
+Distance Tracking: totalDistance and maxDistance in GameState
+Level Milestones: Level 1 (0-100m), Level 2 (100-300m), Level 3 (300-600m), Level 4 (600m+)
+Visual Feedback: Particle effects and camera shake on level-up
+Dynamic Difficulty: Level-based scaling for terrain generation
+2. Enhanced Flying Mechanics
+Leaf Wings: Verified working correctly with gliding physics
+Controls: Hold jump to glide, release to stop gliding
+Duration: 10 seconds when activated
+Visual Feedback: Proper particle effects during gliding
+3. Platform Gap Balancing
+Before: Gaps up to 96 units (double calculation)
+After: Maximum 55 units, all easily jumpable
+Distribution: 55% small (0-25), 30% medium (25-45), 15% large (45-55)
+
 ## License
 MIT
 

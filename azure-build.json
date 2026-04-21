@@ -1,0 +1,31 @@
+{
+  "name": "adventure-colorful-endless",
+  "version": "1.0.0",
+  "description": "Azure deployment configuration for Adventure Colorful Endless game",
+  "scripts": {
+    "build:azure": "AZURE_DEPLOYMENT=true npm run build",
+    "build:prod": "npm run build",
+    "preview:azure": "AZURE_DEPLOYMENT=true npm run preview"
+  },
+  "azure": {
+    "appService": {
+      "name": "adventure-colorful-game",
+      "resourceGroup": "adventure-game-rg",
+      "runtime": "NODE:18-lts",
+      "buildCommand": "npm run build:azure",
+      "outputDirectory": "dist",
+      "startupCommand": "node server.js"
+    },
+    "optimizations": {
+      "compression": true,
+      "caching": true,
+      "bundleSplitting": true,
+      "minification": true,
+      "treeShaking": true
+    },
+    "environment": {
+      "NODE_ENV": "production",
+      "AZURE_DEPLOYMENT": "true"
+    }
+  }
+}
