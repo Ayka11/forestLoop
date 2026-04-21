@@ -111,6 +111,7 @@ export class GameEngine {
   onStateChange: ((state: GameState) => void) | null = null;
   onGameOver: (() => void) | null = null;
   onCheckpoint: (() => void) | null = null;
+  onLevelUp: ((level: number) => void) | null = null;
 
   // Internal
   animationId: number = 0;
