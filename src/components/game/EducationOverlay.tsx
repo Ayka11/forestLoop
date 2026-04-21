@@ -55,8 +55,6 @@ export default function EducationOverlay({ visible, item, position }: EducationO
   const { educationEnabled } = useGame();
   const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
   
-  if (!educationEnabled || !visible) return null;
-
   // Auto-hide after 3 seconds
   useEffect(() => {
     if (visible) {
@@ -74,6 +72,9 @@ export default function EducationOverlay({ visible, item, position }: EducationO
       }
     };
   }, [visible]);
+
+  // Early return after all hooks are called
+  if (!educationEnabled || !visible) return null;
   
   const content = EDUCATION_CONTENT[item as keyof typeof EDUCATION_CONTENT];
   
