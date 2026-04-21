@@ -10,13 +10,19 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
-  type: 'ground' | 'floating' | 'mushroom' | 'vine' | 'log' | 'bridge' | 'ramp';
+  type: 'ground' | 'bridge' | 'floating' | 'mushroom' | 'vine' | 'log' | 'ramp' | 'platform' | 'wall' | 'moving' | 'falling' | 'bouncy' | 'conveyor' | 'switchable';
   color: string;
   bouncy?: boolean;
   moving?: boolean;
   moveRange?: number;
   moveSpeed?: number;
   originalY?: number;
+  rampAngle?: 'gentle' | 'steep';
+  falling?: boolean;
+  fallTimer?: number;
+  conveyorDirection?: 'left' | 'right';
+  switchState?: 'on' | 'off';
+  activated?: boolean;
 }
 
 export interface Collectible {
@@ -24,10 +30,11 @@ export interface Collectible {
   y: number;
   width: number;
   height: number;
-  type: 'wood' | 'stone' | 'flower' | 'leaf' | 'leafToken' | 'mushroom_powerup' | 'star' | 'fireFlower' | 'leafWings' | 'speedBoots' | 'shield';
+  type: 'wood' | 'stone' | 'flower' | 'leaf' | 'leafToken' | 'mushroom_powerup' | 'star' | 'fireFlower' | 'leafWings' | 'speedBoots' | 'shield' | 'timeSlow' | 'magnet' | 'doubleJump' | 'ghostPhase';
   collected: boolean;
   bobOffset: number;
   sparkle: number;
+  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
 }
 
 export interface Obstacle {
@@ -35,10 +42,24 @@ export interface Obstacle {
   y: number;
   width: number;
   height: number;
-  type: 'slime' | 'bird' | 'rollingLog';
+  type: 'slime' | 'bird' | 'rollingLog' | 'spider' | 'bat' | 'rockGolem' | 'fireSprite';
   speed: number;
   bounceOffset: number;
-  direction: number;
+  direction: 1 | -1;
+  patrolPattern?: 'horizontal' | 'vertical' | 'circular' | 'stationary';
+  alertState?: 'idle' | 'alert' | 'aggressive';
+}
+
+export interface Hazard {
+  x: number;
+  width: number;
+  y: number;
+  height: number;
+  type: 'water' | 'fire' | 'spikes' | 'poison' | 'lava';
+  warningShown?: boolean;
+  warningTimer?: number;
+  active?: boolean;
+  damageAmount?: number;
 }
 
 export interface Particle {
@@ -50,7 +71,7 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
-  type: 'sparkle' | 'leaf' | 'collect' | 'trail' | 'firefly' | 'dust';
+  type: 'sparkle' | 'leaf' | 'collect' | 'trail' | 'firefly' | 'dust' | 'spark' | 'speedline' | 'landing' | 'hazardWarning' | 'combo' | 'powerUpAura' | 'damage';
 }
 
 export interface BackgroundLayer {
@@ -67,6 +88,8 @@ export interface BackgroundElement {
   color: string;
   variant: number;
 }
+
+export type MovementMode = 'idle' | 'walk' | 'run' | 'reverse' | 'superSpeed' | 'superJump' | 'dash';
 
 export interface PlayerState {
   x: number;
@@ -91,16 +114,31 @@ export interface PlayerState {
   hasLeafWings: boolean;
   speedBoost: boolean;
   hasShield: boolean;
+  timeSlowActive: boolean;
+  magnetActive: boolean;
+  doubleJumpAvailable: boolean;
+  ghostPhaseActive: boolean;
+  // Special abilities
+  superSpeedTimer: number;
+  superJumpTimer: number;
+  dashTimer: number;
+  dashCooldown: number;
   // Visual
   trailColor: string;
+  finalBoost?: number;
   squash: number;
   stretch: number;
   // Custom properties
   invincibilityGraceDistance?: number;
   id?: string; // for multiplayer
+  jumpHoldTime: number;
+  coyoteTime: number;
+  jumpBufferTime: number;
+  rampBoostTime: number;
+  lastRampSpeed: number;
 }
 
-export type PowerUpType = 'mushroom' | 'star' | 'fireFlower' | 'leafWings' | 'speedBoots' | 'shield';
+export type PowerUpType = 'mushroom' | 'star' | 'fireFlower' | 'leafWings' | 'speedBoots' | 'shield' | 'timeSlow' | 'magnet' | 'doubleJump' | 'ghostPhase';
 
 export interface GameState {
   score: number;
@@ -116,6 +154,13 @@ export interface GameState {
   speed: number;
   baseSpeed: number;
   biome: BiomeType;
+  transitioningBiome: BiomeType | null;
+  transitionProgress: number;
+  isTransitioning: boolean;
+  levelTransitionCooldown: number;
+  currentLevel: number;
+  maxDistance: number;
+  totalDistance: number;
   gameTime: number;
   isPaused: boolean;
   isGameOver: boolean;
@@ -123,7 +168,7 @@ export interface GameState {
   dailyChallenge: DailyChallenge | null;
   achievements: string[];
   streak: number;
-  unlockedBiomes?: BiomeType[];
+  unlockedBiomes: BiomeType[];
 }
 
 export interface Resources {
@@ -157,6 +202,12 @@ export interface ShopItem {
   color: string;
 }
 
+export interface ChallengeProgress {
+  date: string;
+  challenges: DailyChallenge[];
+  streak: number;
+}
+
 export interface DailyChallenge {
   id: string;
   title: string;
@@ -164,7 +215,9 @@ export interface DailyChallenge {
   target: number;
   progress: number;
   reward: number;
-  type: 'distance' | 'collect' | 'combo' | 'craft';
+  type: 'distance' | 'collect' | 'combo' | 'craft' | 'bridge' | 'platform' | 'biome' | 'score' | 'jump' | 'time' | 'perfect' | 'weekend' | 'monthly';
+  completed: boolean;
+  claimed: boolean;
 }
 
 export interface AvatarConfig {
@@ -178,7 +231,7 @@ export interface AvatarConfig {
 
 // ===== CONSTANTS =====
 
-export const GRAVITY = 0.6;
+export const GRAVITY = 0.4;
 export const JUMP_FORCE = -13;
 export const DOUBLE_JUMP_FORCE = -11;
 export const GLIDE_GRAVITY = 0.15;
@@ -190,6 +243,8 @@ export const CANVAS_WIDTH = 1200;
 export const CANVAS_HEIGHT = 700;
 export const CHECKPOINT_INTERVAL = 2000;
 export const POWERUP_DURATION = 600;
+export const COYOTE_TIME = 0.12;
+export const JUMP_BUFFER_TIME = 0.15;
 
 export interface BiomeConfig {
   sky?: string[];

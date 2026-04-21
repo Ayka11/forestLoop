@@ -5,7 +5,7 @@ import { RotateCcw, Home, Share2, Trophy, Upload, Check, Loader2, BarChart3 } fr
 import * as Audio from '@/game/audio';
 
 export default function GameOverScreen() {
-  const { gameState, engine, setScreen, highScore, avatar } = useGame();
+  const { gameState, engine, setScreen, highScore, avatar, clearSavedProgress } = useGame();
   const [animReady, setAnimReady] = useState(false);
   const [showSubmit, setShowSubmit] = useState(false);
   const [playerName, setPlayerName] = useState(() => localStorage.getItem('flo_playerName') || '');
@@ -28,11 +28,17 @@ export default function GameOverScreen() {
 
   const handleRetry = () => {
     Audio.resumeAudio();
-    setScreen('playing');
-    engine.current?.start();
+    clearSavedProgress();
+    // Force a complete restart by going to menu first, then playing
+    setScreen('menu');
+    // Small delay to ensure proper state reset
+    setTimeout(() => {
+      setScreen('playing');
+    }, 100);
   };
 
   const handleMenu = () => {
+    clearSavedProgress();
     setScreen('menu');
   };
 

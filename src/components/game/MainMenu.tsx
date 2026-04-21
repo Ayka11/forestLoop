@@ -10,7 +10,7 @@ const HERO_BG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1
 const FOX_IMG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1773728440372_08f5360f.jpg';
 
 export default function MainMenu() {
-  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, dailyChallenges } = useGame();
+  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, dailyChallenges, savedRunAvailable, resumeSavedRun, clearSavedProgress } = useGame();
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
@@ -26,12 +26,6 @@ export default function MainMenu() {
     console.log('handlePlay called');
     Audio.resumeAudio();
     setScreen('playing');
-    if (engine.current) {
-      console.log('engine.current.start() called');
-      engine.current.start();
-    } else {
-      console.log('engine.current is null');
-    }
   };
 
   return (
@@ -104,16 +98,29 @@ export default function MainMenu() {
         </div>
 
         {/* Play Button */}
-        <button
-          onClick={handlePlay}
-          className="group relative mb-6 bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-white font-black text-xl md:text-2xl px-10 py-4 rounded-2xl shadow-[0_8px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_40px_rgba(16,185,129,0.6)] transition-all duration-300 hover:scale-105 active:scale-95"
-        >
+        <div className="flex flex-col gap-3 items-center">
+          <button
+            onClick={handlePlay}
+            className="group relative mb-6 bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-white font-black text-xl md:text-2xl px-10 py-4 rounded-2xl shadow-[0_8px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_8px_40px_rgba(16,185,129,0.6)] transition-all duration-300 hover:scale-105 active:scale-95"
+          >
           <div className="flex items-center gap-3">
             <Play size={28} fill="white" />
             PLAY
           </div>
           <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
+          </button>
+          {savedRunAvailable && (
+            <button
+              onClick={() => {
+                Audio.resumeAudio();
+                resumeSavedRun();
+              }}
+              className="text-sm font-bold text-white underline underline-offset-4"
+            >
+              Resume Last Run
+            </button>
+          )}
+        </div>
 
         {/* Menu buttons — flex and centered */}
         <div className="flex flex-wrap justify-center items-center gap-3 max-w-xl mx-auto w-full">

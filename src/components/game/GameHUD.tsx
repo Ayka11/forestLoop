@@ -3,7 +3,7 @@ import { useGame } from '@/contexts/GameContext';
 import { Pause, Volume2, VolumeX, Hammer } from 'lucide-react';
 
 export default function GameHUD() {
-  const { gameState, engine, setScreen, musicEnabled, toggleMusic } = useGame();
+  const { gameState, engine, setScreen, musicEnabled, toggleMusic, checkpointMessage } = useGame();
   if (!gameState || !gameState.isPlaying) return null;
 
   const { score, distance, leafTokens, resources, combo, multiplier, lives, biome, activePowerUp } = {
@@ -25,6 +25,10 @@ export default function GameHUD() {
     leafWings: { name: 'GLIDE', color: '#76FF03' },
     speedBoots: { name: 'SPEED', color: '#00BCD4' },
     shield: { name: 'SHIELD', color: '#9C27B0' },
+    timeSlow: { name: 'TIME SLOW', color: '#9C27B0' },
+    magnet: { name: 'MAGNET', color: '#FF9800' },
+    doubleJump: { name: 'DOUBLE JUMP', color: '#00BCD4' },
+    ghostPhase: { name: 'GHOST', color: '#E91E63' },
   };
 
   const powerUpTimer = engine.current?.player?.powerUpTimer || 0;
@@ -66,20 +70,37 @@ export default function GameHUD() {
         </div>
 
         {/* Controls */}
-        <div className="flex flex-col gap-1 pointer-events-auto">
+        <div className="flex flex-col gap-1 pointer-events-auto text-white">
+          <div className="flex items-center gap-2">
+            <div className="text-xs tracking-wider uppercase bg-white/10 rounded-full px-3 py-1 border border-white/20">
+              Lvl {engine.current?.currentLevel !== undefined ? engine.current.currentLevel + 1 : 1}
+            </div>
+            <div className="text-xs text-white/70">{Math.floor(distance)}m</div>
+          </div>
+        <div className="flex gap-2">
           <button
             onClick={() => { engine.current?.pause(); setScreen('paused'); }}
-            className="bg-black/40 backdrop-blur-sm rounded-xl p-2 text-white hover:bg-black/60 transition-colors"
-          >
-            <Pause size={20} />
-          </button>
-          <button
-            onClick={toggleMusic}
-            className="bg-black/40 backdrop-blur-sm rounded-xl p-2 text-white hover:bg-black/60 transition-colors"
-          >
-            {musicEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              className="group flex items-center justify-center rounded-2xl px-3 py-2 bg-gradient-to-br from-white/20 to-white/5 border border-white/20 shadow-lg transition hover:border-white/40"
+              aria-label="Pause game"
+            >
+              <Pause size={18} className="text-white" />
+            </button>
+            <button
+              onClick={toggleMusic}
+              className="group flex items-center justify-center rounded-2xl px-3 py-2 bg-gradient-to-br from-white/20 to-white/5 border border-white/20 shadow-lg transition hover:border-white/40"
+              aria-label={musicEnabled ? 'Mute music' : 'Enable music'}
+            >
+              {musicEnabled ? <Volume2 size={18} className="text-white" /> : <VolumeX size={18} className="text-white" />}
           </button>
         </div>
+        {checkpointMessage && (
+          <div className="absolute inset-x-0 top-4 flex justify-center pointer-events-none">
+            <div className="bg-black/80 text-white px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-lg">
+              {checkpointMessage}
+            </div>
+          </div>
+        )}
+      </div>
       </div>
 
       {/* Resources bar */}
@@ -131,18 +152,12 @@ export default function GameHUD() {
       {/* Mobile jump button */}
       <div className="absolute bottom-4 right-4 md:hidden pointer-events-auto">
         <button
-          onTouchStart={(e) => { e.preventDefault(); engine.current?.jump(); }}
+          onTouchStart={(e) => { e.preventDefault(); engine.current?.jumpPress(); }}
           onTouchEnd={(e) => { e.preventDefault(); engine.current?.releaseJump(); }}
           className="w-20 h-20 rounded-full bg-white/30 backdrop-blur-sm border-2 border-white/50 flex items-center justify-center active:bg-white/50 transition-colors"
         >
           <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
         </button>
-      </div>
-
-      {/* Level feedback */}
-      <div className="bg-black/40 backdrop-blur-sm rounded-xl px-3 py-1.5 text-white flex items-center gap-2 mt-2">
-        <span className="font-bold">Level:</span>
-        <span className="text-lg">{engine.current?.currentLevel !== undefined ? engine.current.currentLevel + 1 : 1}</span>
       </div>
 
       {/* Tutorial hint */}

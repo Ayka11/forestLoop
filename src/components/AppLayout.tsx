@@ -14,8 +14,7 @@ import Leaderboard from '@/components/game/Leaderboard';
 
 function GameApp() {
   const { screen } = useGame();
-  const isInGame = screen === 'playing' || screen === 'paused' || screen === 'crafting' || screen === 'gameover';
-  console.log('GameApp screen state:', screen);
+  const isInGame = screen === 'playing' || screen === 'paused' || screen === 'crafting';
 
   return (
     <div className="relative w-screen h-screen overflow-hidden select-none" style={{ fontFamily: "'Fredoka', 'Comic Neue', sans-serif" }}>

@@ -74,6 +74,11 @@ export function playBounce() {
   setTimeout(() => playTone(500, 0.1, 'sine', 0.2), 30);
 }
 
+export function playRampBoost() {
+  playTone(760, 0.08, 'triangle', 0.28);
+  setTimeout(() => playTone(1180, 0.12, 'sine', 0.24), 30);
+}
+
 export function playHit() {
   playTone(200, 0.2, 'sawtooth', 0.15);
   playTone(150, 0.3, 'square', 0.1);
