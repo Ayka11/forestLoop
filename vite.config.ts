@@ -1,11 +1,13 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  // Load environment variables based on mode
+  const env = loadEnv(mode, process.cwd(), '');
   const isProduction = mode === 'production';
-  const isAzure = process.env.AZURE_DEPLOYMENT === 'true';
+  const isAzure = env.AZURE_DEPLOYMENT === 'true';
 
   return {
     server: {
@@ -20,7 +22,7 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    base: isAzure ? '/app/' : '/', // Azure Web App base path
+    base: env.VITE_BASE_PATH || (isAzure ? '/app/' : '/'), // Use environment-specific base path
     build: {
       // Optimize bundle size
       chunkSizeWarningLimit: isAzure ? 250 : 300, // Stricter for Azure

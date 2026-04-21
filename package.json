@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode development",
     "build": "vite build",
-    "build:azure": "AZURE_DEPLOYMENT=true vite build",
+    "build:azure": "vite build --mode production",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "preview:azure": "AZURE_DEPLOYMENT=true vite preview"
+    "preview": "vite preview --mode development",
+    "preview:azure": "vite preview --mode production"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
