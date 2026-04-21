@@ -183,6 +183,39 @@ Main Menu Settings: Added education toggle button
 Pause Menu: Education toggle already available
 Visual indicator: Purple "E" button shows current state
 Easy access: No need to pause game to toggle education
+
+Jump Physics Constants
+JUMP_FORCE: -13 (base jump velocity)
+DOUBLE_JUMP_FORCE: -11 (double jump velocity)
+GRAVITY: 0.4 (downward acceleration)
+GLIDE_GRAVITY: 0.15 (reduced gravity when gliding)
+Current Gap System
+Small gaps: 0-25 units (55% chance)
+Medium gaps: 25-45 units (30% chance)
+Large gaps: 45-55 units (15% chance)
+Max gap: 55 units (absolute cap)
+Jump Distance Analysis
+With current physics:
+
+Base jump: Can clear ~35-40 units horizontally
+Double jump: Can clear ~25-30 units horizontally
+Run + jump: Can clear ~45-50 units horizontally
+Proposed Improvements
+1. Enhanced Jump Physics
+Dynamic Jump Force: Increase based on player level/skill
+Jump Hold Mechanics: Variable jump height based on button hold duration
+Coyote Time: Allow jumping slightly after leaving platform edge
+Jump Buffering: Register jump input slightly before landing
+2. Adaptive Gap System
+Level-Based Gaps: Reduce max gaps for early levels
+Skill Progression: Gradually increase gap difficulty
+Assist Features: More floating platforms for difficult gaps
+Visual Indicators: Show jump difficulty indicators
+3. Jump Distance Enhancements
+Momentum Conservation: Preserve horizontal velocity better
+Air Control: Slight horizontal movement during jump
+Ledge Grabbing: Auto-jump when walking off small ledges
+Jump Preview: Show landing trajectory preview
 ## License
 MIT
 

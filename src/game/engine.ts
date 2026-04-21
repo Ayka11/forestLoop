@@ -1160,8 +1160,8 @@ export class GameEngine {
         p.y = p.originalY + Math.sin(this.state.gameTime * (p.moveSpeed || 1) * 0.05) * (p.moveRange || 40);
       }
     }
-    // Filter platforms that are too far behind the player
-    const cleanupDistance = this.player.x - CANVAS_WIDTH;
+    // Filter platforms that are too far behind the player (more generous buffer)
+    const cleanupDistance = this.player.x - CANVAS_WIDTH * 2; // Increased buffer
     this.platforms = this.platforms.filter(p => p.x + p.width > cleanupDistance);
   }
 
@@ -1178,8 +1178,8 @@ export class GameEngine {
         }
       }
     }
-    // Filter crafted items that are too far behind the player
-    const cleanupDistance = this.player.x - CANVAS_WIDTH;
+    // Filter crafted items that are too far behind the player (more generous buffer)
+    const cleanupDistance = this.player.x - CANVAS_WIDTH * 2; // Increased buffer
     this.craftedItems = this.craftedItems.filter(p => p.x + p.width > cleanupDistance);
   }
 
@@ -1419,41 +1419,53 @@ export class GameEngine {
         floatingPlatformChance = 0.4; // Fewer floating platforms
       }
       
-      // Improved gap system: more balanced distribution
+      // Fair gap system: balanced for jump physics
       const gapRoll = this.random();
       let safeGap: number;
       let platformWidth: number;
       
-      if (gapRoll < 0.60) {
-        // 60% small gaps - easily walkable/jumpable (increased from 55%)
-        safeGap = 8 + this.random() * 17; // 8-25 units (slightly larger range)
-        platformWidth = 180 + this.random() * 120; // Wider platforms for safety
-      } else if (gapRoll < 0.90) {
-        // 30% medium gaps - require a jump (same percentage)
-        safeGap = 20 + this.random() * 25; // 20-45 units (adjusted range)
-        platformWidth = 160 + this.random() * 80;
+      if (gapRoll < 0.70) {
+        // 70% small gaps - easily walkable/jumpable
+        safeGap = 5 + this.random() * 15; // 5-20 units (much safer)
+        platformWidth = 200 + this.random() * 100; // Much wider platforms
+      } else if (gapRoll < 0.95) {
+        // 25% medium gaps - require proper jump timing
+        safeGap = 15 + this.random() * 15; // 15-30 units (manageable)
+        platformWidth = 180 + this.random() * 80;
       } else {
-        // 10% large gaps - require run+jump or are near floating platforms (reduced from 15%)
-        safeGap = 40 + this.random() * 15; // 40-55 units (reduced max)
-        platformWidth = 150 + this.random() * 70; // Slightly wider platforms
+        // 5% large gaps - challenging but possible with run+jump
+        safeGap = 25 + this.random() * 10; // 25-35 units (much smaller max)
+        platformWidth = 160 + this.random() * 60; // Still wide for safety
       }
       
       // Apply level-based cap
       safeGap = Math.min(safeGap, maxGap);
 
-      // Always add floating platforms based on level and gap size
-      if (safeGap > 25 || this.random() < floatingPlatformChance) {
+      // Guaranteed floating platforms for safety
+      if (safeGap > 20) {
+        // Always add floating platform for gaps > 20 units
+        this.addFloatingPlatform(
+          this.nextPlatformX + safeGap * 0.5,
+          BIOME_COLORS[this.state.biome]
+        );
+      } else if (this.random() < floatingPlatformChance) {
+        // Optional floating platforms for smaller gaps
         this.addFloatingPlatform(
           this.nextPlatformX + safeGap * 0.5,
           BIOME_COLORS[this.state.biome]
         );
       }
       
-      // Spawn hazard in large gaps (optional challenge)
-      if (safeGap > 40 && this.random() < 0.15 && this.state.distance > 600) {
-        const hazardWidth = Math.min(safeGap - 15, 80);
-        this.spawnHazard(this.nextPlatformX + 15, hazardWidth, 'water');
+      // Add extra safety platform for largest gaps
+      if (safeGap > 30) {
+        this.addFloatingPlatform(
+          this.nextPlatformX + safeGap * 0.25,
+          BIOME_COLORS[this.state.biome]
+        );
       }
+      
+      // Remove hazards from gaps (too punishing with new system)
+      // Focus on fair platform-based challenges
 
       this.platforms.push({
         x: this.nextPlatformX + safeGap,
@@ -1879,10 +1891,10 @@ export class GameEngine {
           const parallaxX = camX * 0.03; // Very slow parallax
           const x = el.x - parallaxX;
           // Camera-relative wrapping with extended coverage
-          const viewRange = w + 800;
+          const viewRange = w + 1200; // Increased from w + 800
           const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
           for (let pos = startPos; pos < startPos + viewRange; pos += 200) {
-            if (pos >= x - 400 && pos <= x + 400) {
+            if (pos >= x - 600 && pos <= x + 600) { // Increased buffer
               this.drawCloud(ctx, pos, el.y, el.scale);
             }
           }
@@ -1896,10 +1908,10 @@ export class GameEngine {
           const parallaxX = camX * 0.08; // Slow parallax
           const x = el.x - parallaxX;
           // Camera-relative wrapping
-          const viewRange = w + 600;
+          const viewRange = w + 900; // Increased from w + 600
           const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
           for (let pos = startPos; pos < startPos + viewRange; pos += 180) {
-            if (pos >= x - 300 && pos <= x + 300) {
+            if (pos >= x - 450 && pos <= x + 450) { // Increased buffer
               this.drawMountain(ctx, pos, h * 0.5, el.scale, el.color);
             }
           }
@@ -1913,10 +1925,10 @@ export class GameEngine {
           const parallaxX = camX * 0.25; // Medium parallax
           const x = el.x - parallaxX;
           // Camera-relative wrapping
-          const viewRange = w + 400;
+          const viewRange = w + 600; // Increased from w + 400
           const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
           for (let pos = startPos; pos < startPos + viewRange; pos += 110) {
-            if (pos >= x - 200 && pos <= x + 200) {
+            if (pos >= x - 300 && pos <= x + 300) { // Increased buffer
               this.drawTree(ctx, pos, h * 0.55, el.scale * 1.5, el.color, el.variant);
             }
           }
@@ -1930,10 +1942,10 @@ export class GameEngine {
           const parallaxX = camX * 0.45; // Fast parallax
           const x = el.x - parallaxX;
           // Camera-relative wrapping
-          const viewRange = w + 200;
+          const viewRange = w + 400; // Increased from w + 200
           const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
           for (let pos = startPos; pos < startPos + viewRange; pos += 70) {
-            if (pos >= x - 100 && pos <= x + 100) {
+            if (pos >= x - 200 && pos <= x + 200) { // Increased buffer
               if (el.type === 'bush') {
                 this.drawBush(ctx, pos, GROUND_Y - 10, el.scale, el.color);
               } else if (el.type === 'mushroom') {
