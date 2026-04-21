@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { X, ShoppingBag, Check, Lock, Sparkles } from 'lucide-react';
+import ShopItemIcon from './ShopItemIcon';
 
 const RARITY_COLORS = {
   common: { bg: 'from-gray-400 to-gray-500', border: 'border-gray-400', text: 'text-gray-300', label: 'Common' },
@@ -11,6 +12,14 @@ const RARITY_COLORS = {
 
 const CATEGORY_ICONS: Record<string, string> = {
   skin: 'Skins', hat: 'Hats', pet: 'Pets', boost: 'Boosts', block: 'Blocks',
+};
+
+const CATEGORY_TINTS: Record<string, string> = {
+  skin: 'rgba(255,140,66,0.06)',
+  hat: 'rgba(156,39,176,0.06)',
+  pet: 'rgba(233,30,99,0.06)',
+  boost: 'rgba(33,150,243,0.06)',
+  block: 'rgba(76,175,80,0.06)',
 };
 
 export default function ShopModal() {
@@ -89,9 +98,10 @@ export default function ShopModal() {
                 <button
                   key={item.id}
                   onClick={() => setSelectedItem(item.id)}
-                  className={`relative p-3 rounded-2xl border-2 transition-all hover:scale-105 ${
+                  className={`relative p-3 rounded-2xl border-2 transition-all hover:scale-105 hover:shadow-lg hover:shadow-white/10 ${
                     selectedItem === item.id ? `${rarity.border} bg-white/10` : 'border-white/5 bg-white/5 hover:border-white/20'
                   }`}
+                  style={{ backgroundColor: selectedItem === item.id ? undefined : CATEGORY_TINTS[item.category] }}
                 >
                   {/* Rarity badge */}
                   <div className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-gradient-to-r ${rarity.bg} text-white`}>
@@ -101,10 +111,13 @@ export default function ShopModal() {
                   {/* Item icon */}
                   <div
                     className="w-14 h-14 mx-auto rounded-xl flex items-center justify-center mb-2"
-                    style={{ backgroundColor: item.color + '30' }}
+                    style={{ backgroundColor: item.color + '25' }}
                   >
-                    <div className="w-10 h-10 rounded-lg" style={{ backgroundColor: item.color, opacity: 0.8 }} />
+                    <ShopItemIcon icon={item.icon} color={item.color} size={32} />
                   </div>
+                  {item.rarity === 'legendary' && (
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none animate-pulse border-2 border-yellow-400/30" />
+                  )}
 
                   <div className="text-white font-bold text-xs truncate">{item.name}</div>
                   <div className="text-white/40 text-[10px] truncate">{item.description}</div>
@@ -137,9 +150,9 @@ export default function ShopModal() {
               <div className="flex items-start gap-4">
                 <div
                   className="w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: selected.color + '30' }}
+                  style={{ backgroundColor: selected.color + '25' }}
                 >
-                  <div className="w-12 h-12 rounded-lg" style={{ backgroundColor: selected.color }} />
+                  <ShopItemIcon icon={selected.icon} color={selected.color} size={40} />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-white font-bold text-lg">{selected.name}</h3>

@@ -1,10 +1,10 @@
 import React from 'react';
 import { useGame } from '@/contexts/GameContext';
-import { Play, Home, Volume2, VolumeX, Settings } from 'lucide-react';
+import { Play, Home, Volume2, VolumeX, Settings, BookOpen } from 'lucide-react';
 import * as Audio from '@/game/audio';
 
 export default function PauseMenu() {
-  const { engine, setScreen, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, gameState } = useGame();
+  const { engine, setScreen, musicEnabled, sfxEnabled, educationEnabled, toggleMusic, toggleSfx, toggleEducation, gameState } = useGame();
 
   const handleResume = () => {
     Audio.resumeAudio();
@@ -62,6 +62,15 @@ export default function PauseMenu() {
               >
                 {sfxEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
                 SFX
+              </button>
+              <button
+                onClick={toggleEducation}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  educationEnabled ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-white/40'
+                }`}
+              >
+                <BookOpen size={14} />
+                Edu
               </button>
             </div>
           </div>
