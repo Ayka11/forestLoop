@@ -10,7 +10,7 @@ const HERO_BG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1
 const FOX_IMG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1773728440372_08f5360f.jpg';
 
 export default function MainMenu() {
-  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, toggleMusic, toggleSfx, dailyChallenges, savedRunAvailable, resumeSavedRun, clearSavedProgress } = useGame();
+  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, educationEnabled, toggleMusic, toggleSfx, toggleEducation, dailyChallenges, savedRunAvailable, resumeSavedRun, clearSavedProgress } = useGame();
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
@@ -136,7 +136,7 @@ export default function MainMenu() {
         {/* Settings toggle removed, now in menu grid */}
 
         {showSettings && (
-          <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-3 flex gap-4">
+          <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-3 flex flex-wrap gap-4">
             <button onClick={toggleMusic} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
               {musicEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
               Music {musicEnabled ? 'ON' : 'OFF'}
@@ -144,6 +144,10 @@ export default function MainMenu() {
             <button onClick={toggleSfx} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
               {sfxEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
               SFX {sfxEnabled ? 'ON' : 'OFF'}
+            </button>
+            <button onClick={toggleEducation} className="flex items-center gap-2 text-white text-sm hover:text-purple-300 transition-colors">
+              <span className="w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center text-xs">E</span>
+              Edu {educationEnabled ? 'ON' : 'OFF'}
             </button>
           </div>
         )}

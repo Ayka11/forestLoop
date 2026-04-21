@@ -58,19 +58,19 @@ export class GameEngine {
 
       // Level progression based on distance milestones
       const previousLevel = this.state.currentLevel;
-      if (this.state.totalDistance >= 100 && previousLevel === 1) {
+      if (this.state.totalDistance >= 1000 && previousLevel === 1) {
         this.state.currentLevel = 2;
         this.onLevelUp?.(2);
         // Level 1→2: Green upward burst + "LEVEL UP!"
         this.spawnLevelUpEffect(2, '#00FF00', 'upward');
         this.cameraShake = 5;
-      } else if (this.state.totalDistance >= 300 && previousLevel === 2) {
+      } else if (this.state.totalDistance >= 3000 && previousLevel === 2) {
         this.state.currentLevel = 3;
         this.onLevelUp?.(3);
         // Level 2→3: Blue swirls + horizontal sweep + "ADVANCED!"
         this.spawnLevelUpEffect(3, '#00BFFF', 'horizontal');
         this.cameraShake = 6;
-      } else if (this.state.totalDistance >= 600 && previousLevel === 3) {
+      } else if (this.state.totalDistance >= 6000 && previousLevel === 3) {
         this.state.currentLevel = 4;
         this.onLevelUp?.(4);
         // Level 3→4: Purple explosion + screen flash + "MASTER!"
@@ -785,11 +785,22 @@ export class GameEngine {
     const py = recipe.type === 'bridge' ? GROUND_Y : GROUND_Y - 80;
     const w = recipe.type === 'bridge' ? 200 : recipe.type === 'ramp' ? 120 : 80;
     const h = recipe.type === 'wall' ? 80 : 20;
-    this.craftedItems.push({
+    const craftedItem: Platform = {
       x: px, y: py, width: w, height: h,
-      type: recipe.type as Platform['type'], color: recipe.type === 'bridge' ? '#8D6E63' : recipe.type === 'platform' ? '#FF69B4' : recipe.type === 'ramp' ? '#FFD700' : '#90A4AE',
+      type: recipe.type as Platform['type'], 
+      color: recipe.type === 'bridge' ? '#8D6E63' : recipe.type === 'platform' ? '#FF69B4' : recipe.type === 'ramp' ? '#FFD700' : '#90A4AE',
       bouncy: recipe.type === 'platform',
-    });
+    };
+
+    // Add movement to bridges
+    if (recipe.type === 'bridge') {
+      craftedItem.moving = true;
+      craftedItem.moveRange = 30 + Math.random() * 20; // 30-50 units movement range
+      craftedItem.moveSpeed = 0.5 + Math.random() * 0.5; // 0.5-1.0 speed
+      craftedItem.originalY = py;
+    }
+
+    this.craftedItems.push(craftedItem);
     Audio.playCraft();
     this.spawnParticles(px, py, 15, '#FFD700', 'sparkle');
     this.emitState();
@@ -945,6 +956,7 @@ export class GameEngine {
 
     this.updatePlayer(dt);
     this.updatePlatforms(this.player.vx * dt);
+    this.updateCraftedItems(dt);
     this.updateCollectibles(this.player.vx * dt, dt);
     this.updateObstacles(this.player.vx * dt, dt);
     this.updateParticles(dt);
@@ -1139,6 +1151,23 @@ export class GameEngine {
     // Filter platforms that are too far behind the player
     const cleanupDistance = this.player.x - CANVAS_WIDTH;
     this.platforms = this.platforms.filter(p => p.x + p.width > cleanupDistance);
+  }
+
+  updateCraftedItems(dt: number) {
+    // Update movement for crafted items (bridges)
+    for (const item of this.craftedItems) {
+      if (item.moving && item.originalY !== undefined) {
+        // Vertical movement with sinusoidal pattern
+        item.y = item.originalY + Math.sin(this.state.gameTime * (item.moveSpeed || 1) * 0.05) * (item.moveRange || 40);
+        
+        // Add slight horizontal movement for bridges
+        if (item.type === 'bridge') {
+          item.x += Math.sin(this.state.gameTime * (item.moveSpeed || 1) * 0.03) * 0.5;
+        }
+      }
+    }
+    // Filter crafted items that are too far behind the player
+    const cleanupDistance = this.player.x - CANVAS_WIDTH;
     this.craftedItems = this.craftedItems.filter(p => p.x + p.width > cleanupDistance);
   }
 
@@ -1378,23 +1407,23 @@ export class GameEngine {
         floatingPlatformChance = 0.4; // Fewer floating platforms
       }
       
-      // Structured gap system: small (easy), medium (normal), large (challenge)
+      // Improved gap system: more balanced distribution
       const gapRoll = this.random();
       let safeGap: number;
       let platformWidth: number;
       
-      if (gapRoll < 0.55) {
-        // 55% small gaps - easily walkable/jumpable
-        safeGap = 10 + this.random() * 15;
-        platformWidth = 180 + this.random() * 100;
-      } else if (gapRoll < 0.85) {
-        // 30% medium gaps - require a jump
-        safeGap = 25 + this.random() * 20;
-        platformWidth = 150 + this.random() * 80;
+      if (gapRoll < 0.60) {
+        // 60% small gaps - easily walkable/jumpable (increased from 55%)
+        safeGap = 8 + this.random() * 17; // 8-25 units (slightly larger range)
+        platformWidth = 180 + this.random() * 120; // Wider platforms for safety
+      } else if (gapRoll < 0.90) {
+        // 30% medium gaps - require a jump (same percentage)
+        safeGap = 20 + this.random() * 25; // 20-45 units (adjusted range)
+        platformWidth = 160 + this.random() * 80;
       } else {
-        // 15% large gaps - require run+jump or are near floating platforms
-        safeGap = 45 + this.random() * 10;
-        platformWidth = 140 + this.random() * 60;
+        // 10% large gaps - require run+jump or are near floating platforms (reduced from 15%)
+        safeGap = 40 + this.random() * 15; // 40-55 units (reduced max)
+        platformWidth = 150 + this.random() * 70; // Slightly wider platforms
       }
       
       // Apply level-based cap
