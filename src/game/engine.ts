@@ -60,18 +60,30 @@ export class GameEngine {
       const previousLevel = this.state.currentLevel;
       if (this.state.totalDistance >= 1000 && previousLevel === 1) {
         this.state.currentLevel = 2;
+        // Auto-pause game for level-up notification
+        if (this.state.isPlaying && !this.state.isPaused) {
+          this.pause();
+        }
         this.onLevelUp?.(2);
         // Level 1→2: Green upward burst + "LEVEL UP!"
         this.spawnLevelUpEffect(2, '#00FF00', 'upward');
         this.cameraShake = 5;
       } else if (this.state.totalDistance >= 3000 && previousLevel === 2) {
         this.state.currentLevel = 3;
+        // Auto-pause game for level-up notification
+        if (this.state.isPlaying && !this.state.isPaused) {
+          this.pause();
+        }
         this.onLevelUp?.(3);
         // Level 2→3: Blue swirls + horizontal sweep + "ADVANCED!"
         this.spawnLevelUpEffect(3, '#00BFFF', 'horizontal');
         this.cameraShake = 6;
       } else if (this.state.totalDistance >= 6000 && previousLevel === 3) {
         this.state.currentLevel = 4;
+        // Auto-pause game for level-up notification
+        if (this.state.isPlaying && !this.state.isPaused) {
+          this.pause();
+        }
         this.onLevelUp?.(4);
         // Level 3→4: Purple explosion + screen flash + "MASTER!"
         this.spawnLevelUpEffect(4, '#FF00FF', 'explosion');

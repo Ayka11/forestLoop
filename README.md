@@ -164,6 +164,25 @@ Before: Gaps up to 96 units (double calculation)
 After: Maximum 55 units, all easily jumpable
 Distribution: 55% small (0-25), 30% medium (25-45), 15% large (45-55)
 
+Level Progression Scaling
+Updated distances: Level 1 (0-1000m), Level 2 (1000-3000m), Level 3 (3000-6000m), Level 4 (6000m+)
+10x progression for more rewarding gameplay
+Maintains visual effects and difficulty scaling
+🌉 Dynamic Bridge Movement
+Vertical oscillation: Sinusoidal movement with 30-50 unit range
+Horizontal drift: Slight left-right movement for dynamic gameplay
+Speed variation: 0.5-1.0 movement speed per bridge
+Smooth animation: Tied to game time for consistent movement
+⚖️ Optimized Platform Gaps
+Improved distribution: 60% small, 30% medium, 10% large gaps
+Better balance: Reduced large gaps from 15% to 10%
+Wider platforms: Increased safety margins
+Level-based scaling: Maintains difficulty progression
+📚 Education Mode Access
+Main Menu Settings: Added education toggle button
+Pause Menu: Education toggle already available
+Visual indicator: Purple "E" button shows current state
+Easy access: No need to pause game to toggle education
 ## License
 MIT
 

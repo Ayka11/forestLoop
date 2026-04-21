@@ -25,6 +25,14 @@ export default function GameCanvas() {
     message: '',
     color: '#00FF00'
   });
+
+  // Resume game function for level-up notifications
+  const handleResumeGame = useCallback(() => {
+    if (engine.current?.state.isPaused) {
+      engine.current.resume();
+      setScreenRef.current?.('playing');
+    }
+  }, []);
   const saveProgressRef = useRef(saveProgress);
   const showCheckpointToastRef = useRef(showCheckpointToast);
   const clearSavedProgressRef = useRef(clearSavedProgress);
@@ -299,6 +307,7 @@ export default function GameCanvas() {
         message={levelUpToast.message}
         color={levelUpToast.color}
         onComplete={() => setLevelUpToast(prev => ({ ...prev, visible: false }))}
+        onResumeGame={handleResumeGame}
       />
     </div>
   );

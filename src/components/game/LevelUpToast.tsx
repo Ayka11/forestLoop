@@ -7,6 +7,7 @@ interface LevelUpToastProps {
   message: string;
   color: string;
   onComplete?: () => void;
+  onResumeGame?: () => void;
 }
 
 const levelConfig = {
@@ -48,11 +49,20 @@ const levelConfig = {
   }
 };
 
-export default function LevelUpToast({ visible, level, message, color, onComplete }: LevelUpToastProps) {
+export default function LevelUpToast({ visible, level, message, color, onComplete, onResumeGame }: LevelUpToastProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
   const config = levelConfig[level as keyof typeof levelConfig] || levelConfig[2];
+
+  const handleDismiss = () => {
+    setIsAnimating(false);
+    setTimeout(() => {
+      setIsVisible(false);
+      onComplete?.();
+      onResumeGame?.(); // Resume game when dismissed
+    }, 300);
+  };
 
   useEffect(() => {
     if (visible) {
@@ -61,83 +71,96 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
       
       // Auto-hide after 3 seconds
       const timer = setTimeout(() => {
-        setIsAnimating(false);
-        setTimeout(() => {
-          setIsVisible(false);
-          onComplete?.();
-        }, 300);
-      }, 2700);
+        handleDismiss();
+      }, 3000);
       
       return () => clearTimeout(timer);
     }
-  }, [visible, onComplete]);
+  }, [visible, onComplete, onResumeGame]);
+
+  // Add keyboard event listener for ESC key
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isVisible) {
+        handleDismiss();
+      }
+    };
+
+    if (isVisible) {
+      window.addEventListener('keydown', handleKeyPress);
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [isVisible]);
 
   if (!isVisible) return null;
 
   const Icon = config.icon;
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+    <div className="fixed top-4 right-4 z-50 pointer-events-none">
       <div 
         className={`
-          relative px-8 py-4 rounded-2xl shadow-2xl border-2
+          relative px-4 py-3 rounded-xl shadow-xl border
           bg-gradient-to-br ${config.bgGradient} ${config.borderColor}
-          transform transition-all duration-500 ease-out
-          ${isAnimating ? 'scale-110 opacity-100' : 'scale-100 opacity-0'}
+          transform transition-all duration-500 ease-out pointer-events-auto
+          ${isAnimating ? 'scale-105 opacity-100 translate-x-0' : 'scale-95 opacity-0 translate-x-4'}
         `}
         style={{
-          boxShadow: `0 0 40px ${config.color}40, 0 0 80px ${config.color}20`,
-          backdropFilter: 'blur(8px)'
+          boxShadow: `0 0 20px ${config.color}40, 0 0 40px ${config.color}20`,
+          backdropFilter: 'blur(8px)',
+          minWidth: '280px'
         }}
       >
         {/* Close button */}
         <button
-          onClick={() => {
-            setIsAnimating(false);
-            setTimeout(() => {
-              setIsVisible(false);
-              onComplete?.();
-            }, 300);
-          }}
-          className="absolute -top-2 -right-2 p-1 rounded-full bg-black/20 hover:bg-black/30 transition-colors pointer-events-auto"
+          onClick={handleDismiss}
+          className="absolute -top-1 -right-1 p-1 rounded-full bg-black/20 hover:bg-black/30 transition-colors"
         >
-          <X size={16} className="text-white/70 hover:text-white" />
+          <X size={14} className="text-white/70 hover:text-white" />
         </button>
 
         {/* Content */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {/* Icon */}
           <div 
-            className="p-3 rounded-full bg-white/10 backdrop-blur-sm"
+            className="p-2 rounded-full bg-white/10 backdrop-blur-sm"
             style={{ 
-              boxShadow: `0 0 20px ${config.color}60`,
+              boxShadow: `0 0 15px ${config.color}60`,
               animation: 'pulse 2s infinite'
             }}
           >
-            <Icon size={32} className={config.textColor} style={{ color: config.color }} />
+            <Icon size={24} className={config.textColor} style={{ color: config.color }} />
           </div>
 
           {/* Text */}
-          <div className="flex flex-col">
-            <div className={`text-3xl font-bold ${config.textColor} mb-1`} style={{ color: config.color }}>
+          <div className="flex flex-col flex-1">
+            <div className={`text-xl font-bold ${config.textColor}`} style={{ color: config.color }}>
               {config.message}
             </div>
-            <div className="text-white/60 text-sm">
+            <div className="text-white/60 text-xs">
               Level {level} Reached
             </div>
           </div>
         </div>
 
         {/* Progress indicator */}
-        <div className="mt-3 w-full bg-white/10 rounded-full h-2 overflow-hidden">
+        <div className="mt-2 w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
           <div 
             className="h-full transition-all duration-1000 ease-out"
             style={{ 
               width: `${Math.min(100, (level - 1) * 25)}%`,
               backgroundColor: config.color,
-              boxShadow: `0 0 10px ${config.color}`
+              boxShadow: `0 0 8px ${config.color}`
             }}
           />
+        </div>
+
+        {/* Dismiss hint */}
+        <div className="mt-2 text-white/40 text-xs text-center">
+          ESC to continue
         </div>
       </div>
 
@@ -168,7 +191,7 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
         ))}
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes pulse {
           0%, 100% { transform: scale(1); opacity: 0.8; }
           50% { transform: scale(1.2); opacity: 1; }
