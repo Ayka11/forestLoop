@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 interface TouchControlsProps {
@@ -7,18 +7,20 @@ interface TouchControlsProps {
   onJump: () => void;
   onStopMoving: () => void;
   onReleaseJump: () => void;
+  enabled?: boolean;
 }
 
-export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopMoving, onReleaseJump }: TouchControlsProps) {
+export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopMoving, onReleaseJump, enabled = true }: TouchControlsProps) {
   const isMobile = useIsMobile();
+  const [shouldRender, setShouldRender] = useState(true);
   const [isMovingLeft, setIsMovingLeft] = useState(false);
   const [isMovingRight, setIsMovingRight] = useState(false);
   const [joystickPosition, setJoystickPosition] = useState({ x: 50, y: 50 });
   const joystickRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Handle joystick movement
   const handleJoystickStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     if (!joystickRef.current) return;
 
@@ -46,13 +48,12 @@ export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopM
       const angle = Math.atan2(deltaY, deltaX);
       const limitedX = Math.cos(angle) * maxDistance;
       const limitedY = Math.sin(angle) * maxDistance;
-      
+
       setJoystickPosition({
         x: 50 + (limitedX / maxDistance) * 30,
         y: 50 + (limitedY / maxDistance) * 30
       });
 
-      // Determine movement direction
       if (Math.abs(limitedX) > Math.abs(limitedY)) {
         if (limitedX < -10) {
           setIsMovingLeft(true);
@@ -70,35 +71,37 @@ export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopM
         y: 50 + (deltaY / maxDistance) * 30
       });
     }
-  }, [onMoveLeft, onMoveRight]);
+  }, [enabled, onMoveLeft, onMoveRight]);
 
   const handleJoystickMove = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     if (!touchStartRef.current || !joystickRef.current) return;
     handleJoystickStart(e);
-  }, [handleJoystickStart]);
+  }, [enabled, handleJoystickStart]);
 
   const handleJoystickEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     setJoystickPosition({ x: 50, y: 50 });
     setIsMovingLeft(false);
     setIsMovingRight(false);
     onStopMoving();
     touchStartRef.current = null;
-  }, [onStopMoving]);
+  }, [enabled, onStopMoving]);
 
-  // Handle jump button
   const handleJumpStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     onJump();
-  }, [onJump]);
+  }, [enabled, onJump]);
 
   const handleJumpEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    if (!enabled) return;
     e.preventDefault();
     onReleaseJump();
-  }, [onReleaseJump]);
+  }, [enabled, onReleaseJump]);
 
-  // Prevent default touch behaviors
   useEffect(() => {
     const preventDefault = (e: TouchEvent) => {
       if (e.touches.length > 1) {
@@ -110,14 +113,25 @@ export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopM
     return () => document.removeEventListener('touchmove', preventDefault);
   }, []);
 
-  if (!isMobile) return null;
+  useEffect(() => {
+    const checkMobile = () => {
+      const isActualMobile = typeof window !== 'undefined' && 
+        (window.innerWidth < 768 || 'ontouchstart' in window);
+      setShouldRender(isActualMobile && enabled);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [enabled]);
+
+  if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-50 md:hidden">
-      {/* Virtual Joystick - Left Side */}
-      <div 
+    <div className="pointer-events-none fixed inset-0 z-50 md:hidden" style={{ display: shouldRender ? 'fixed' : 'none' }}>
+      <div
         ref={joystickRef}
-        className="absolute left-8 bottom-24 w-32 h-32 pointer-events-auto"
+        className="pointer-events-auto absolute left-4 bottom-[max(3rem,calc(env(safe-area-inset-bottom)+2.5rem))] h-28 w-28 sm:left-6 sm:h-32 sm:w-32"
         onTouchStart={handleJoystickStart}
         onTouchMove={handleJoystickMove}
         onTouchEnd={handleJoystickEnd}
@@ -126,11 +140,9 @@ export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopM
         onMouseUp={handleJoystickEnd}
         onMouseLeave={handleJoystickEnd}
       >
-        {/* Joystick Base */}
-        <div className="absolute inset-0 bg-black/20 rounded-full border-2 border-white/30 backdrop-blur-sm">
-          {/* Joystick Handle */}
-          <div 
-            className="absolute w-12 h-12 bg-white/80 rounded-full shadow-lg border-2 border-white/60 transition-all duration-100"
+        <div className="absolute inset-0 rounded-full border border-white/25 bg-black/20 backdrop-blur-md">
+          <div
+            className="absolute h-11 w-11 rounded-full border border-white/50 bg-white/80 shadow-lg transition-all duration-100"
             style={{
               left: `${joystickPosition.x}%`,
               top: `${joystickPosition.y}%`,
@@ -139,50 +151,41 @@ export default function TouchControls({ onMoveLeft, onMoveRight, onJump, onStopM
             }}
           />
         </div>
-        {/* Direction Indicators */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-white/40 text-xs font-bold">← MOVE →</div>
+        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold tracking-[0.25em] text-white/45">
+          MOVE
         </div>
       </div>
 
-      {/* Jump Button - Right Side */}
-      <div 
-        className="absolute right-8 bottom-24 w-20 h-20 pointer-events-auto"
+      <div
+        className="pointer-events-auto absolute right-4 bottom-[max(3rem,calc(env(safe-area-inset-bottom)+2.5rem))] flex h-20 w-20 items-center justify-center rounded-full border border-blue-300/70 bg-blue-500/80 shadow-lg backdrop-blur-md transition-all duration-100 active:bg-blue-600/80 sm:right-6 sm:h-24 sm:w-24"
         onTouchStart={handleJumpStart}
         onTouchEnd={handleJumpEnd}
         onMouseDown={handleJumpStart}
         onMouseUp={handleJumpEnd}
         onMouseLeave={handleJumpEnd}
       >
-        <div className="w-full h-full bg-blue-500/80 rounded-full shadow-lg border-2 border-blue-400 active:bg-blue-600/80 transition-all duration-100 flex items-center justify-center backdrop-blur-sm">
-          <span className="text-white font-bold text-lg">JUMP</span>
-        </div>
+        <span className="text-sm font-black tracking-[0.2em] text-white sm:text-base">JUMP</span>
       </div>
 
-      {/* Special Ability Buttons - Top Corners */}
-      <div className="absolute top-4 left-4 pointer-events-auto flex gap-2">
-        <button 
-          className="w-12 h-12 bg-purple-500/80 rounded-full shadow-lg border border-purple-400 text-white text-xs font-bold backdrop-blur-sm"
-          onTouchStart={(e) => { e.preventDefault(); /* Handle special ability 1 */ }}
+      <div className="pointer-events-auto absolute left-1/2 top-4 flex -translate-x-1/2 gap-2">
+        <button
+          className="h-11 w-11 rounded-full border border-purple-300/40 bg-purple-500/80 text-xs font-black text-white shadow-lg backdrop-blur-md"
+          onTouchStart={(e) => { e.preventDefault(); }}
         >
           A1
         </button>
-      </div>
-
-      <div className="absolute top-4 right-4 pointer-events-auto flex gap-2">
-        <button 
-          className="w-12 h-12 bg-orange-500/80 rounded-full shadow-lg border border-orange-400 text-white text-xs font-bold backdrop-blur-sm"
-          onTouchStart={(e) => { e.preventDefault(); /* Handle special ability 2 */ }}
+        <button
+          className="h-11 w-11 rounded-full border border-orange-300/40 bg-orange-500/80 text-xs font-black text-white shadow-lg backdrop-blur-md"
+          onTouchStart={(e) => { e.preventDefault(); }}
         >
           A2
         </button>
       </div>
 
-      {/* Pause Button - Bottom Center */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 pointer-events-auto">
-        <button 
-          className="w-16 h-10 bg-gray-700/80 rounded-full shadow-lg border border-gray-600 text-white text-xs font-bold backdrop-blur-sm"
-          onTouchStart={(e) => { e.preventDefault(); /* Handle pause */ }}
+      <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2">
+        <button
+          className="h-10 rounded-full border border-white/20 bg-gray-700/80 px-5 text-xs font-black text-white shadow-lg backdrop-blur-md"
+          onTouchStart={(e) => { e.preventDefault(); }}
         >
           PAUSE
         </button>

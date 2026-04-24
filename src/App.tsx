@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+const routerBasename = window.location.pathname.startsWith('/app') ? '/app' : undefined;
 
 const App = () => (
   <ThemeProvider defaultTheme="light">
@@ -16,7 +17,13 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter
+          basename={routerBasename}
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="*" element={<NotFound />} />

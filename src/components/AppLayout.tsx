@@ -21,7 +21,7 @@ function GameApp() {
   return (
     <div className="relative w-screen h-screen overflow-hidden select-none" style={{ fontFamily: "'Fredoka', 'Comic Neue', sans-serif" }}>
       {/* Force GameCanvas to always render for testing */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0">
         <GameCanvas />
       </div>
 

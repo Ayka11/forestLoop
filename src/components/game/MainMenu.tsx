@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '@/contexts/GameContext';
 import { Play, ShoppingBag, User, Trophy, Calendar, Settings, Volume2, VolumeX, BarChart3 } from 'lucide-react';
 import * as Audio from '@/game/audio';
-import { BIOME_COLORS, BIOME_UNLOCK_MILESTONES } from '@/game/types';
+import { BIOME_COLORS, BIOME_UNLOCK_MILESTONES, DIFFICULTY_CONFIGS } from '@/game/types';
 import ProfilePage from '@/components/game/ProfilePage';
 import Lobby from '@/components/game/Lobby';
 
@@ -10,7 +10,7 @@ const HERO_BG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1
 const FOX_IMG = 'https://d64gsuwffb70l.cloudfront.net/69b8f1f974d0e4f3bd07aa41_1773728440372_08f5360f.jpg';
 
 export default function MainMenu() {
-  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, educationEnabled, toggleMusic, toggleSfx, toggleEducation, dailyChallenges, savedRunAvailable, resumeSavedRun, clearSavedProgress } = useGame();
+  const { engine, setScreen, avatar, highScore, totalTokens, musicEnabled, sfxEnabled, educationEnabled, toggleMusic, toggleSfx, toggleEducation, dailyChallenges, savedRunAvailable, resumeSavedRun, clearSavedProgress, difficulty, setDifficulty } = useGame();
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
@@ -136,7 +136,29 @@ export default function MainMenu() {
         {/* Settings toggle removed, now in menu grid */}
 
         {showSettings && (
-          <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-3 flex flex-wrap gap-4">
+          <div className="mt-2 bg-black/50 backdrop-blur-md rounded-xl p-4 flex flex-col gap-4 min-w-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-white text-sm font-bold">Difficulty:</span>
+              <div className="flex gap-2">
+                {(['easy', 'normal', 'hard'] as const).map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => setDifficulty(level)}
+                    className={`px-3 py-1 rounded-lg text-sm font-bold transition-all ${
+                      difficulty === level
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-gray-600 text-white hover:bg-gray-500'
+                    }`}
+                  >
+                    <span className="capitalize">{DIFFICULTY_CONFIGS[level].name}</span>
+                    <div className="text-xs text-white/70">{DIFFICULTY_CONFIGS[level].ageRange}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="border-t border-white/20 pt-2" />
+            
             <button onClick={toggleMusic} className="flex items-center gap-2 text-white text-sm hover:text-yellow-300 transition-colors">
               {musicEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
               Music {musicEnabled ? 'ON' : 'OFF'}

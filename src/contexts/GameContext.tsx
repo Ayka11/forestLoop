@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { GameState, Resources, AvatarConfig, ShopItem, DailyChallenge, ChallengeProgress } from '@/game/types';
+import { GameState, Resources, AvatarConfig, ShopItem, DailyChallenge, ChallengeProgress, DifficultyLevel, DIFFICULTY_CONFIGS } from '@/game/types';
 import { GameEngine, SavedRun } from '@/game/engine';
 
 export type ScreenType = 'menu' | 'playing' | 'paused' | 'gameover' | 'shop' | 'avatar' | 'achievements' | 'crafting' | 'daily' | 'leaderboard';
@@ -46,6 +46,8 @@ interface GameContextType {
   educationOverlay: { visible: boolean; item: string; position: { x: number; y: number } };
   showEducationOverlay: (item: string, position: { x: number; y: number }) => void;
   hideEducationOverlay: () => void;
+  difficulty: DifficultyLevel;
+  setDifficulty: (d: DifficultyLevel) => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -153,6 +155,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // ====================== Existing States ======================
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [screen, setScreen] = useState<ScreenType>('menu');
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>(() => {
+    const saved = localStorage.getItem('flo_difficulty');
+    return (saved as DifficultyLevel) || 'normal';
+  });
   const [avatar, setAvatar] = useState<AvatarConfig>(() => {
     const saved = localStorage.getItem('flo_avatar');
     return saved ? JSON.parse(saved) : { character: 'fox', color: '#FF8C42', hat: null, accessory: null, pet: null, trail: null };
@@ -405,6 +411,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('flo_educationEnabled', String(newState));
   }, [educationEnabled]);
 
+  const handleSetDifficulty = useCallback((d: DifficultyLevel) => {
+    setDifficulty(d);
+    localStorage.setItem('flo_difficulty', d);
+  }, []);
+
   return (
     <GameContext.Provider value={{
       gameState,
@@ -448,6 +459,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       educationOverlay,
       showEducationOverlay,
       hideEducationOverlay,
+      difficulty,
+      setDifficulty: handleSetDifficulty,
     }}>
       {children}
     </GameContext.Provider>

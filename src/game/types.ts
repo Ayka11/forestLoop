@@ -10,7 +10,7 @@ export interface Platform {
   y: number;
   width: number;
   height: number;
-  type: 'ground' | 'bridge' | 'floating' | 'mushroom' | 'vine' | 'log' | 'ramp' | 'platform' | 'wall' | 'moving' | 'falling' | 'bouncy' | 'conveyor' | 'switchable';
+  type: 'ground' | 'bridge' | 'floating' | 'mushroom' | 'vine' | 'log' | 'ramp' | 'platform' | 'wall' | 'moving' | 'falling' | 'bouncy' | 'conveyor' | 'switchable' | 'cloud';
   color: string;
   bouncy?: boolean;
   moving?: boolean;
@@ -62,6 +62,15 @@ export interface Hazard {
   damageAmount?: number;
 }
 
+export interface LevelGoal {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  reached: boolean;
+  pulseTimer: number;
+}
+
 export interface Particle {
   x: number;
   y: number;
@@ -83,10 +92,24 @@ export interface BackgroundLayer {
 export interface BackgroundElement {
   x: number;
   y: number;
-  type: 'tree' | 'bush' | 'cloud' | 'mountain' | 'flower' | 'mushroom' | 'firefly';
+  type: 'tree' | 'bush' | 'cloud' | 'mountain' | 'flower' | 'mushroom' | 'firefly' | 'statue' | 'mushroom_house' | 'sign';
   scale: number;
   color: string;
   variant: number;
+}
+
+export interface BackgroundCreature {
+  x: number;
+  y: number;
+  type: 'bunny' | 'butterfly' | 'bird';
+  vx: number;
+  vy: number;
+  direction: 1 | -1;
+  animTimer: number;
+  animFrame: number;
+  scale: number;
+  color: string;
+  baseY?: number; // For fluttering/hovering creatures
 }
 
 export type MovementMode = 'idle' | 'walk' | 'run' | 'reverse' | 'superSpeed' | 'superJump' | 'dash';
@@ -163,6 +186,7 @@ export interface GameState {
   maxDistance: number;
   totalDistance: number;
   gameTime: number;
+  levelNotificationTriggered: boolean;
   isPaused: boolean;
   isGameOver: boolean;
   isPlaying: boolean;
@@ -170,6 +194,10 @@ export interface GameState {
   achievements: string[];
   streak: number;
   unlockedBiomes: BiomeType[];
+  levelCompleted: boolean;
+  levelCompletionDistance: number;
+  difficulty: DifficultyLevel;
+  showTutorial?: boolean;
 }
 
 export interface Resources {
@@ -230,7 +258,28 @@ export interface AvatarConfig {
   trail: string | null;
 }
 
-// ===== CONSTANTS =====
+export type DifficultyLevel = 'easy' | 'normal' | 'hard';
+
+export interface DifficultyConfig {
+  name: string;
+  ageRange: string;
+  description: string;
+  platformGapMultiplier: number;
+  floatingPlatformChance: number;
+  enemySpeedMultiplier: number;
+  enemyFrequency: number;
+  enemyStartDistance: number;
+  powerUpFrequency: number;
+  resourceGain: number;
+  uiScale: number;
+  showJumpTrajectory: boolean;
+  showEnemyWarnings: boolean;
+  tutorialEnabled: boolean;
+  safeZoneDistance: number;
+  hazardStartDistance: number;
+}
+
+// ===== CONSTANTS ====
 
 export const GRAVITY = 0.4;
 export const JUMP_FORCE = -13;
@@ -246,6 +295,64 @@ export const CANVAS_WIDTH = 1200;
 export const CANVAS_HEIGHT = 700;
 export const CHECKPOINT_INTERVAL = 2000;
 export const POWERUP_DURATION = 600;
+
+// Difficulty presets for age-appropriate gameplay
+export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
+  easy: {
+    name: 'Easy',
+    ageRange: 'Ages 6-8',
+    description: 'Perfect for new players! Wider jumps, more power-ups, helpful hints.',
+    platformGapMultiplier: 0.6,
+    floatingPlatformChance: 0.8,
+    enemySpeedMultiplier: 0.7,
+    enemyFrequency: 0.5,
+    enemyStartDistance: 200,
+    powerUpFrequency: 1.5,
+    resourceGain: 1.2,
+    uiScale: 1.2,
+    showJumpTrajectory: true,
+    showEnemyWarnings: true,
+    tutorialEnabled: true,
+    safeZoneDistance: 150,
+    hazardStartDistance: 200,
+  },
+  normal: {
+    name: 'Normal',
+    ageRange: 'Ages 9-11',
+    description: 'Balanced challenge with steady progression.',
+    platformGapMultiplier: 1.0,
+    floatingPlatformChance: 0.6,
+    enemySpeedMultiplier: 1.0,
+    enemyFrequency: 1.0,
+    enemyStartDistance: 0,
+    powerUpFrequency: 1.0,
+    resourceGain: 1.0,
+    uiScale: 1.0,
+    showJumpTrajectory: true,
+    showEnemyWarnings: true,
+    tutorialEnabled: false,
+    safeZoneDistance: 0,
+    hazardStartDistance: 0,
+  },
+  hard: {
+    name: 'Hard',
+    ageRange: 'Ages 12-15',
+    description: 'Maximum challenge! Narrow jumps, rare power-ups, fast enemies.',
+    platformGapMultiplier: 1.2,
+    floatingPlatformChance: 0.4,
+    enemySpeedMultiplier: 1.3,
+    enemyFrequency: 1.5,
+    enemyStartDistance: 0,
+    powerUpFrequency: 0.7,
+    resourceGain: 0.9,
+    uiScale: 0.95,
+    showJumpTrajectory: false,
+    showEnemyWarnings: false,
+    tutorialEnabled: false,
+    safeZoneDistance: 0,
+    hazardStartDistance: 0,
+  },
+};
 
 export interface BiomeConfig {
   sky?: string[];
@@ -356,3 +463,39 @@ export const CHARACTER_COLORS: Record<string, { body: string; belly: string; ear
   cat: { body: '#808080', belly: '#D3D3D3', ear: '#696969', nose: '#FFB6C1' },
   owl: { body: '#8B4513', belly: '#DEB887', ear: '#654321', nose: '#FFD700' },
 };
+
+// Add cloud platform type
+export interface CloudPlatform extends Platform {
+  type: 'cloud';
+  floatOffset?: number;
+  floatSpeed?: number;
+  dissolveTimer?: number;
+  isDissolving?: boolean;
+}
+
+// Add jump power variables
+export const MIN_JUMP_FORCE = 8;
+export const MAX_JUMP_FORCE = 18;
+export const JUMP_CHARGE_RATE = 0.35; // per frame
+
+// Add new platform types for better tracking
+export interface MushroomPlatform extends Platform {
+  type: 'mushroom';
+  bounceForce: number;
+  bounceCount: number;
+  hasBeenUsed: boolean;
+  respawnTimer: number;
+  isPartOfChain: boolean;
+  chainId: string;
+}
+
+export interface CloudPlatformExtended extends Platform {
+  type: 'cloud';
+  tier: number; // 1=low, 2=high
+  isPartOfChain: boolean;
+  chainId: string;
+  floatOffset?: number;
+  floatSpeed?: number;
+  dissolveTimer?: number;
+  isDissolving?: boolean;
+}

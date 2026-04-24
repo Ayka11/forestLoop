@@ -1,29 +1,31 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameEngine } from '@/game/engine';
-import { DailyChallenge, CANVAS_WIDTH, CANVAS_HEIGHT } from '@/game/types';
 import { useGame } from '@/contexts/GameContext';
 import EducationOverlay from './EducationOverlay';
 import TouchControls from './TouchControls';
 import LevelUpToast from './LevelUpToast';
+import LevelCompletionReward from './LevelCompletionReward';
 
 export default function GameCanvas() {
-  const [isLandscape, setIsLandscape] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    // Landscape if width/height ratio is at least 1.2
-    return window.innerWidth / window.innerHeight > 1.2;
-  });
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { engine, avatar, updateGameState, updateChallengeProgress, setScreen, saveProgress, showCheckpointToast, savedRunSnapshot, clearSavedProgress, pendingResume, markResumeConsumed, educationOverlay, showEducationOverlay, hideEducationOverlay } = useGame();
-  const challengeProgressRef = useRef(updateChallengeProgress);
+  const [canvasReady, setCanvasReady] = useState(false);
+  const { engine, avatar, updateGameState, setScreen, saveProgress, showCheckpointToast, savedRunSnapshot, clearSavedProgress, pendingResume, markResumeConsumed, educationOverlay, showEducationOverlay, hideEducationOverlay, difficulty } = useGame();
   const updateGameStateRef = useRef(updateGameState);
   const setScreenRef = useRef(setScreen);
-  
+
   // Level-up toast state
   const [levelUpToast, setLevelUpToast] = useState({
     visible: false,
     level: 1,
     message: '',
     color: '#00FF00'
+  });
+
+  // Level completion reward state
+  const [levelCompletion, setLevelCompletion] = useState({
+    visible: false,
+    level: 1,
+    bonusData: undefined as any,
   });
 
   // Resume game function for level-up notifications
@@ -37,19 +39,17 @@ export default function GameCanvas() {
   const showCheckpointToastRef = useRef(showCheckpointToast);
   const clearSavedProgressRef = useRef(clearSavedProgress);
 
-  // Combine all ref updates into a single useEffect to prevent random restarts
   useEffect(() => {
-    challengeProgressRef.current = updateChallengeProgress;
     updateGameStateRef.current = updateGameState;
     setScreenRef.current = setScreen;
     saveProgressRef.current = saveProgress;
     showCheckpointToastRef.current = showCheckpointToast;
     clearSavedProgressRef.current = clearSavedProgress;
-  }, [updateChallengeProgress, updateGameState, setScreen, saveProgress, showCheckpointToast, clearSavedProgress]);
+  }, [updateGameState, setScreen, saveProgress, showCheckpointToast, clearSavedProgress]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const ge = new GameEngine(canvasRef.current);
+    const ge = new GameEngine(canvasRef.current, difficulty);
     ge.setAvatar(avatar);
     engine.current = ge;
 
@@ -73,7 +73,7 @@ export default function GameCanvas() {
         4: { message: 'MASTER!', color: '#FF00FF' },
         5: { message: 'LEGENDARY!', color: '#FFD700' }
       };
-      
+
       const config = levelConfig[level as keyof typeof levelConfig] || levelConfig[2];
       setLevelUpToast({
         visible: true,
@@ -99,21 +99,33 @@ export default function GameCanvas() {
       markResumeConsumed();
     }
 
-    const handleResize = () => ge.resize();
-    window.addEventListener('resize', handleResize);
+    const resize = () => ge.resize();
+    resize();
+    window.addEventListener('resize', resize);
+
+    let observer: ResizeObserver | null = null;
+    const parent = canvasRef.current.parentElement;
+    if (parent && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => resize());
+      observer.observe(parent);
+    }
+
+    setCanvasReady(true);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
       ge.destroy();
       engine.current = null;
+      setCanvasReady(false);
     };
-  }, [avatar, savedRunSnapshot, pendingResume, markResumeConsumed]);
+  }, [avatar, difficulty, savedRunSnapshot, pendingResume, markResumeConsumed, clearSavedProgressRef, engine, hideEducationOverlay, showEducationOverlay]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!engine.current) return;
       let moved = false;
-      
+
       // Special ability combinations
       if (e.ctrlKey && e.shiftKey) {
         if (e.code === 'ArrowRight' || e.code === 'KeyD') {
@@ -130,10 +142,8 @@ export default function GameCanvas() {
         moved = true;
       } else if (e.shiftKey && (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW')) {
         e.preventDefault();
-        engine.current.activateSuperJump(); // Enhanced jump with Shift
-      }
-      // Regular movement
-      else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        engine.current.activateSuperJump();
+      } else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         e.preventDefault();
         engine.current.jumpPress();
       } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
@@ -151,11 +161,9 @@ export default function GameCanvas() {
         engine.current.pause();
         setScreenRef.current?.(engine.current.state.isPaused ? 'paused' : 'playing');
       } else if (e.code === 'KeyR' && e.ctrlKey) {
-        // Ctrl+R: Open rename dialog (for character/avatar customization)
         e.preventDefault();
         setScreenRef.current?.('avatar');
       } else if (e.code === 'KeyN' && e.ctrlKey) {
-        // Ctrl+N: Change player name
         e.preventDefault();
         const currentName = localStorage.getItem('flo_playerName') || '';
         const newName = prompt('Enter your name:', currentName);
@@ -163,23 +171,18 @@ export default function GameCanvas() {
           localStorage.setItem('flo_playerName', newName.trim());
         }
       } else if (e.code === 'KeyS' && e.ctrlKey) {
-        // Ctrl+S: Open shop for item customization
         e.preventDefault();
         setScreenRef.current?.('shop');
       } else if (e.code === 'KeyE' && e.ctrlKey) {
-        // Ctrl+E: Edit/rename current equipped items
         e.preventDefault();
         setScreenRef.current?.('avatar');
       } else if (e.code === 'KeyC' && e.ctrlKey) {
-        // Ctrl+C: Character customization
         e.preventDefault();
         setScreenRef.current?.('avatar');
       } else if (e.code === 'KeyI' && e.ctrlKey) {
-        // Ctrl+I: Toggle inventory/items rename
         e.preventDefault();
         setScreenRef.current?.(engine.current.state.isPaused ? 'playing' : 'paused');
       } else if (e.code === 'F2') {
-        // F2: Quick rename player name
         e.preventDefault();
         const currentName = localStorage.getItem('flo_playerName') || '';
         const newName = prompt('Quick rename:', currentName);
@@ -187,7 +190,7 @@ export default function GameCanvas() {
           localStorage.setItem('flo_playerName', newName.trim());
         }
       }
-      
+
       if (!moved && !['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
         engine.current.setMovementMode('idle');
       }
@@ -198,9 +201,7 @@ export default function GameCanvas() {
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
         engine.current.releaseJump();
       }
-      if (
-        ['ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD', 'KeyS', 'ArrowDown'].includes(e.code)
-      ) {
+      if (['ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD', 'KeyS', 'ArrowDown'].includes(e.code)) {
         engine.current.setMovementMode('idle');
       }
     };
@@ -218,17 +219,7 @@ export default function GameCanvas() {
       window.removeEventListener('blur', handleBlur);
     };
   }, [engine]);
-  useEffect(() => {
-    const handleResize = () => {
-      setIsLandscape(window.innerWidth / window.innerHeight > 1.2);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
 
-  // Enhanced touch controls
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     engine.current?.jumpPress();
@@ -247,7 +238,6 @@ export default function GameCanvas() {
     engine.current?.releaseJump();
   }, []);
 
-  // Touch control callbacks
   const handleMoveLeft = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('reverse');
@@ -274,21 +264,16 @@ export default function GameCanvas() {
   }, []);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center">
+    <div className="relative h-full w-full overflow-hidden">
       <canvas
         ref={canvasRef}
-        className="block cursor-pointer select-none"
-        style={{ imageRendering: 'auto', width: '100%', height: '100%', maxHeight: '100%', aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
+        className="block h-full w-full cursor-pointer select-none touch-none"
+        style={{ imageRendering: 'auto' }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
       />
-      {!isLandscape && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60 text-white text-center px-6">
-          For the best experience, please rotate your device to landscape mode.
-        </div>
-      )}
       <EducationOverlay
         visible={educationOverlay.visible}
         item={educationOverlay.item}
@@ -300,6 +285,7 @@ export default function GameCanvas() {
         onJump={handleTouchJump}
         onStopMoving={handleStopMoving}
         onReleaseJump={handleTouchRelease}
+        enabled={canvasReady}
       />
       <LevelUpToast
         visible={levelUpToast.visible}
@@ -308,6 +294,13 @@ export default function GameCanvas() {
         color={levelUpToast.color}
         onComplete={() => setLevelUpToast(prev => ({ ...prev, visible: false }))}
         onResumeGame={handleResumeGame}
+      />
+      <LevelCompletionReward
+        visible={levelCompletion.visible}
+        level={levelCompletion.level}
+        bonusData={levelCompletion.bonusData}
+        onComplete={() => setLevelCompletion(prev => ({ ...prev, visible: false }))}
+        onContinue={handleResumeGame}
       />
     </div>
   );

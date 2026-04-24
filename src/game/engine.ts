@@ -5,7 +5,9 @@ import {
   BASE_SCROLL_SPEED, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT,
   CHECKPOINT_INTERVAL, POWERUP_DURATION, BIOME_COLORS, CHARACTER_COLORS,
   AvatarConfig, CraftRecipe, CRAFT_RECIPES, DailyChallenge,
-  COYOTE_TIME, JUMP_BUFFER_TIME,
+  COYOTE_TIME, JUMP_BUFFER_TIME, CloudPlatform,
+  MIN_JUMP_FORCE, MAX_JUMP_FORCE, JUMP_CHARGE_RATE,
+  MushroomPlatform, CloudPlatformExtended, DifficultyLevel, DIFFICULTY_CONFIGS,
 } from './types';
 import * as Audio from './audio';
 
@@ -58,7 +60,7 @@ export class GameEngine {
 
       // Level progression based on distance milestones
       const previousLevel = this.state.currentLevel;
-      if (this.state.totalDistance >= 1000 && previousLevel === 1) {
+      if (this.state.totalDistance >= 5000 && previousLevel === 1) {
         this.state.currentLevel = 2;
         // Auto-pause game for level-up notification
         if (this.state.isPlaying && !this.state.isPaused) {
@@ -68,7 +70,7 @@ export class GameEngine {
         // Level 1→2: Green upward burst + "LEVEL UP!"
         this.spawnLevelUpEffect(2, '#00FF00', 'upward');
         this.cameraShake = 5;
-      } else if (this.state.totalDistance >= 3000 && previousLevel === 2) {
+      } else if (this.state.totalDistance >= 13000 && previousLevel === 2) {
         this.state.currentLevel = 3;
         // Auto-pause game for level-up notification
         if (this.state.isPlaying && !this.state.isPaused) {
@@ -78,7 +80,7 @@ export class GameEngine {
         // Level 2→3: Blue swirls + horizontal sweep + "ADVANCED!"
         this.spawnLevelUpEffect(3, '#00BFFF', 'horizontal');
         this.cameraShake = 6;
-      } else if (this.state.totalDistance >= 6000 && previousLevel === 3) {
+      } else if (this.state.totalDistance >= 36000 && previousLevel === 3) {
         this.state.currentLevel = 4;
         // Auto-pause game for level-up notification
         if (this.state.isPlaying && !this.state.isPaused) {
@@ -273,18 +275,45 @@ export class GameEngine {
   hazards: Hazard[] = [];
   jumpHeld: boolean = false;
   jumpHoldTime: number = 0;
+  
+  // Add new properties for jump charging and trajectory
+  jumpCharge: number = 0;
+  isChargingJump: boolean = false;
+  showJumpTrajectory: boolean = true;
+  trajectoryPoints: { x: number; y: number }[] = [];
+  
+  // Vertical gameplay properties
+  mushroomBounceMultiplier: number = 1.5;
+  isOnMushroomChain: boolean = false;
+  mushroomChainCount: number = 0;
+  cloudChainActive: boolean = false;
+  cloudChainTimer: number = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  // Difficulty system properties
+  difficulty: DifficultyLevel = 'normal';
+  difficultyConfig = DIFFICULTY_CONFIGS['normal'];
+  currentAirTier: number = 0; // 0=ground, 1=low clouds, 2=high clouds
+  verticalSequenceActive: boolean = false;
+  nextCloudSequenceX: number = 1800; // X position for next mushroom→cloud sequence
+
+  constructor(canvas: HTMLCanvasElement, difficulty: DifficultyLevel = 'normal') {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.width = CANVAS_WIDTH;
     this.height = CANVAS_HEIGHT;
     this.scale = 1;
     this.seed = Math.random() * 10000;
+    this.difficulty = difficulty;
+    this.difficultyConfig = DIFFICULTY_CONFIGS[difficulty];
 
     this.player = this.createPlayer();
     this.state = this.createGameState();
     this.avatar = { character: 'fox', color: '#FF8C42', hat: null, accessory: null, pet: null, trail: null };
+
+    // Apply difficulty-specific UI scaling
+    if (this.difficultyConfig.uiScale !== 1.0) {
+      this.scale = this.difficultyConfig.uiScale;
+    }
 
     // Early-game invincibility grace period
     this.player.invincible = false; // Start without invincibility to prevent flashing
@@ -328,6 +357,10 @@ export class GameEngine {
       dailyChallenge: null, achievements: JSON.parse(localStorage.getItem('flo_achievements') || '[]'),
       streak: parseInt(localStorage.getItem('flo_streak') || '0'),
       unlockedBiomes: ['enchanted', 'crystal', 'autumn', 'firefly'],
+      difficulty: this.difficulty,
+      levelNotificationTriggered: false,
+      levelCompleted: false,
+      levelCompletionDistance: 0,
     };
   }
 
@@ -450,6 +483,11 @@ export class GameEngine {
     this.jumpHeld = true;
     this.jumpHoldTime = 0;
     
+    // Start charging jump if grounded
+    if (this.player.grounded) {
+      this.isChargingJump = true;
+    }
+    
     // Jump buffering - allow jump input slightly before landing
     if (this.player.jumpBufferTime <= 0) {
       this.player.jumpBufferTime = JUMP_BUFFER_TIME;
@@ -563,27 +601,34 @@ export class GameEngine {
   }
 
   generateInitialTerrain() {
-    const biome = BIOME_COLORS[this.state.biome];
-    // Update terrain/platform generation to use biome-specific assets and mechanics
-    // Ground platforms
-    for (let x = -100; x < CANVAS_WIDTH + 600; x += 120 + this.random() * 40) {
-      const w = 180 + this.random() * 60;
-      this.platforms.push({
-        x, y: GROUND_Y, width: w, height: 200,
-        type: (biome.platforms ? biome.platforms[0] : 'ground') as Platform['type'], color: biome.ground,
-      });
-      this.nextPlatformX = x + w + 30 + this.random() * 30;
-    }
-    // Some floating platforms
-    for (let i = 0; i < 5; i++) {
-      const x = 400 + i * 300 + this.random() * 100;
-      this.addFloatingPlatform(x, biome);
-    }
-    // Initial collectibles
-    for (let i = 0; i < 10; i++) {
-      this.addCollectible(300 + i * 150 + this.random() * 80, biome);
-    }
+  const biome = BIOME_COLORS[this.state.biome];
+  const viewportWidth = Math.max(CANVAS_WIDTH, this.width);
+  
+  // Generate initial ground platforms - continuous, no gaps
+  let currentX = 400;
+  while (currentX < viewportWidth * 1.5) {
+    const platformWidth = 200 + this.random() * 80;
+    
+    this.platforms.push({
+      x: currentX,
+      y: GROUND_Y,
+      width: platformWidth,
+      height: 72,
+      type: 'ground',
+      color: biome.ground,
+    });
+    
+    currentX += platformWidth;
   }
+  
+  // Update next platform X to continue from where we left off
+  this.nextPlatformX = currentX;
+  
+  // Add some collectibles
+  for (let i = 0; i < 12; i++) {
+    this.addCollectible(300 + i * 130 + this.random() * 60, biome);
+  }
+}
 
   addFloatingPlatform(x: number, biome: any) {
     // Increase mushroom spawn rate and add more variety
@@ -608,24 +653,26 @@ export class GameEngine {
     this.platforms.push({
       x, y, width: w, height: 20,
       type: type as Platform['type'], color: colors[type],
+      bouncy: type === 'mushroom',
     });
     this.nextPlatformX = x + w + 30 + this.random() * 30;
   }
 
   addCollectible(x: number, biome: any) {
-    // Increase power-up spawn rate and restore missing collectibles
+    // Apply difficulty-based power-up frequency
+    const powerUpChance = 0.15 * this.difficultyConfig.powerUpFrequency;
     const rand = this.random();
     let type;
     
-    if (rand < 0.15) {
-      // 15% chance for power-ups
+    if (rand < powerUpChance) {
+      // Power-ups scaled by difficulty
       const powerTypes = ['mushroom_powerup', 'star', 'fireFlower', 'leafWings', 'speedBoots', 'shield'];
       type = powerTypes[Math.floor(this.random() * powerTypes.length)];
     } else if (rand < 0.4) {
       // 25% chance for leaf tokens
       type = 'leafToken';
     } else {
-      // 60% chance for regular resources
+      // Remaining chance for regular resources
       const resourceTypes = ['wood', 'stone', 'flower', 'leaf'];
       type = resourceTypes[Math.floor(this.random() * resourceTypes.length)];
     }
@@ -659,45 +706,45 @@ export class GameEngine {
       case 'bird':
         y = GROUND_Y - 120 - this.random() * 100;
         width = 36; height = 32;
-        speed = 2 + this.random() * 2 * levelMultiplier;
+        speed = (2 + this.random() * 2 * levelMultiplier) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'horizontal';
         break;
       case 'spider':
         y = GROUND_Y - 80 - this.random() * 40;
         width = 32; height = 28;
-        speed = 1.5 + this.random() * 1.5;
+        speed = (1.5 + this.random() * 1.5) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'vertical';
         break;
       case 'bat':
         y = GROUND_Y - 150 - this.random() * 80;
         width = 30; height = 26;
-        speed = 3 + this.random() * 2;
+        speed = (3 + this.random() * 2) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'circular';
         break;
       case 'rollingLog':
         y = GROUND_Y - 30;
         width = 50; height = 36;
-        speed = 2.5 + this.random() * 1.5;
+        speed = (2.5 + this.random() * 1.5) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'stationary';
         break;
       case 'rockGolem':
         y = GROUND_Y - 40;
         width = 48; height = 48;
-        speed = 0.8 + this.random() * 0.7;
+        speed = (0.8 + this.random() * 0.7) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'horizontal';
         alertState = this.random() > 0.7 ? 'aggressive' : 'idle';
         break;
       case 'fireSprite':
         y = GROUND_Y - 100 - this.random() * 60;
         width = 28; height = 28;
-        speed = 4 + this.random() * 2;
+        speed = (4 + this.random() * 2) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'circular';
         alertState = 'aggressive';
         break;
       default: // slime
         y = GROUND_Y - 30;
         width = 36; height = 32;
-        speed = 1 + this.random() * 0.5;
+        speed = (1 + this.random() * 0.5) * this.difficultyConfig.enemySpeedMultiplier;
         patrolPattern = 'horizontal';
     }
     
@@ -712,42 +759,50 @@ export class GameEngine {
 
   // ===== INPUT =====
   jump() {
-    if (this.respawnTimer > 0) return;
-    if (!this.state.isPlaying || this.state.isPaused) return;
-    Audio.resumeAudio();
+  if (this.respawnTimer > 0) return;
+  if (!this.state.isPlaying || this.state.isPaused) return;
+  if (!this.player.grounded && this.player.coyoteTime >= COYOTE_TIME && this.player.doubleJumped) return;  
+  Audio.resumeAudio();
 
-    // Dynamic jump force based on level
-    const levelMultiplier = 1 + (this.state.currentLevel - 1) * 0.1; // 10% increase per level
-    const jumpForce = JUMP_FORCE * levelMultiplier;
+  const levelMultiplier = 1 + (this.state.currentLevel - 1) * 0.1;  
+  // Variable jump based on how long button was held
+  let jumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE));
+  jumpPower = Math.min(MAX_JUMP_FORCE, Math.max(MIN_JUMP_FORCE, jumpPower));
+  jumpPower *= levelMultiplier;
+  
+  const timeSinceGrounded = performance.now() / 1000 - this.player.lastGroundedTime;
+  const canCoyoteJump = !this.player.grounded && timeSinceGrounded < COYOTE_TIME;
 
-    // Check for coyote time (jump slightly after leaving platform)
-    const timeSinceGrounded = performance.now() / 1000 - this.player.lastGroundedTime;
-    const canCoyoteJump = !this.player.grounded && timeSinceGrounded < COYOTE_TIME;
-
-    if (this.player.grounded || canCoyoteJump) {
-      this.player.vy = jumpForce * (this.player.bigMode ? 1.3 : 1);
-      this.player.grounded = false;
-      this.player.jumping = true;
-      this.player.squash = 0.6;
-      this.player.stretch = 1.4;
-      this.player.lastGroundedTime = performance.now() / 1000; // Update last grounded time
-      Audio.playJump();
-      this.spawnParticles(this.player.x, this.player.y + this.player.height, 5, '#8B7355', 'dust');
-      this.jumpCount++;
-      this.challengeUpdater?.('jump', 1);
-    } else if (!this.player.doubleJumped) {
-      this.player.vy = DOUBLE_JUMP_FORCE * (this.player.bigMode ? 1.2 : 1);
-      this.player.doubleJumped = true;
-      this.player.squash = 0.7;
-      this.player.stretch = 1.3;
-      Audio.playDoubleJump();
-      this.spawnParticles(this.player.x, this.player.y + this.player.height, 8, '#FFD700', 'sparkle');
-      this.jumpCount++;
-      this.challengeUpdater?.('jump', 1);
-    } else if (this.player.hasLeafWings && !this.player.gliding) {
-      this.player.gliding = true;
-    }
+  if (this.player.grounded || canCoyoteJump) {
+    this.player.vy = -jumpPower * (this.player.bigMode ? 1.3 : 1);
+    this.player.grounded = false;
+    this.player.jumping = true;
+    this.player.squash = 0.6;
+    this.player.stretch = 1.4;
+    this.player.lastGroundedTime = performance.now() / 1000;
+    Audio.playJump();
+    this.spawnParticles(this.player.x, this.player.y + this.player.height, 8, '#8B7355', 'dust');
+    this.jumpCount++;
+    this.challengeUpdater?.('jump', 1);
+    this.isChargingJump = false;
+    this.jumpCharge = 0;
+  } else if (!this.player.doubleJumped && !this.player.grounded) {
+    // Double jump with variable power too
+    const doubleJumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE) * 0.8);
+    this.player.vy = -doubleJumpPower * (this.player.bigMode ? 1.2 : 1);
+    this.player.doubleJumped = true;
+    this.player.squash = 0.7;
+    this.player.stretch = 1.3;
+    Audio.playDoubleJump();
+    this.spawnParticles(this.player.x, this.player.y + this.player.height, 12, '#FFD700', 'sparkle');
+    this.jumpCount++;
+    this.challengeUpdater?.('jump', 1);
+    this.isChargingJump = false;
+    this.jumpCharge = 0;
+  } else if (this.player.hasLeafWings && !this.player.gliding) {
+    this.player.gliding = true;
   }
+}
 
   private pickRandomBiome(): BiomeType {
     const unlocked = this.state.unlockedBiomes;
@@ -781,6 +836,8 @@ export class GameEngine {
   releaseJump() {
     this.player.gliding = false;
     this.jumpHeld = false;
+    this.isChargingJump = false;
+    this.jumpCharge = 0;
   }
 
   craft(recipe: CraftRecipe) {
@@ -863,6 +920,11 @@ export class GameEngine {
       this.challengeUpdater?.('distance', distanceDelta);
       this.lastDistance = this.state.distance;
     }
+
+    // Tutorial/safe zone logic
+    const tutorialEnabled = this.difficultyConfig.tutorialEnabled;
+    const safeZoneDistance = this.difficultyConfig.safeZoneDistance || 0;
+    this.state.showTutorial = tutorialEnabled && this.state.distance < safeZoneDistance;
     const scoreDelta = this.state.score - this.lastScore;
     if (scoreDelta > 0) {
       this.challengeUpdater?.('score', scoreDelta);
@@ -1011,8 +1073,282 @@ export class GameEngine {
     if (this.frameCount % 5 === 0) this.emitState();
   }
 
+  // Add new method for cloud platform generation
+  addCloudPlatform(x: number, y: number, width: number) {
+    const cloudPlatform: CloudPlatform = {
+      x, y, width, height: 24,
+      type: 'cloud',
+      color: 'rgba(255,255,255,0.9)',
+      floatOffset: Math.random() * Math.PI * 2,
+      floatSpeed: 0.5 + Math.random() * 0.5,
+      dissolveTimer: 0,
+      isDissolving: false,
+    };
+    
+    this.platforms.push(cloudPlatform);
+  }
+
+  // Add enhanced mushroom platform method
+  addMushroomPlatform(x: number, y: number, isPartOfChain: boolean = false, chainId: string = '') {
+    const mushroomPlatform: MushroomPlatform = {
+      x, y, width: 70 + this.random() * 30, height: 20,
+      type: 'mushroom',
+      color: '#FF6B6B',
+      bouncy: true,
+      bounceForce: JUMP_FORCE * 1.6,
+      bounceCount: 0,
+      hasBeenUsed: false,
+      respawnTimer: 0,
+      isPartOfChain,
+      chainId: chainId || `mushroom_${Date.now()}_${Math.random()}`
+    };
+    
+    this.platforms.push(mushroomPlatform);
+  }
+
+  // Add cloud platform with tier system
+  addCloudPlatformTiered(x: number, y: number, width: number, tier: number, isPartOfChain: boolean = false, chainId: string = '') {
+    const cloudPlatform: CloudPlatformExtended = {
+      x, y, width, height: 24,
+      type: 'cloud',
+      color: `rgba(255,255,255,${0.7 + tier * 0.15})`,
+      floatOffset: Math.random() * Math.PI * 2,
+      floatSpeed: 0.5 + Math.random() * 0.5,
+      dissolveTimer: 0,
+      isDissolving: false,
+      tier: tier,
+      isPartOfChain: isPartOfChain,
+      chainId: chainId || `cloud_${Date.now()}_${Math.random()}`
+    };
+    
+    this.platforms.push(cloudPlatform);
+  }
+
+  // Add method to update jump trajectory visualization
+  updateJumpTrajectory() {
+    this.trajectoryPoints = [];
+    
+    const jumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE));
+    const startX = this.player.x + this.player.width / 2;
+    const startY = this.player.y;
+    const vx = this.player.vx || 2.2; // Default walk speed
+    const vy = -jumpPower;
+    
+    // Calculate trajectory points
+    for (let t = 0; t <= 1; t += 0.05) {
+      const x = startX + vx * t * 10;
+      const y = startY + vy * t * 10 + 0.5 * GRAVITY * (t * 10) * (t * 10);
+      
+      if (y < this.height) {
+        this.trajectoryPoints.push({ x, y });
+      }
+    }
+  }
+
+  // Add jump charge visualization in renderPlayer or add new render method
+  renderJumpCharge(ctx: CanvasRenderingContext2D) {
+    if (this.isChargingJump && this.player.grounded && this.jumpCharge > 0) {
+      const chargePercent = this.jumpCharge;
+      const x = this.player.x + this.player.width / 2;
+      const y = this.player.y - 30;
+      
+      // Draw charge ring
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(x, y, 20 + chargePercent * 10, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 200, 50, ${0.3 + chargePercent * 0.5})`;
+      ctx.lineWidth = 3 + chargePercent * 3;
+      ctx.stroke();
+      
+      // Draw charge fill
+      ctx.beginPath();
+      ctx.arc(x, y, 10 + chargePercent * 5, 0, Math.PI * 2 * chargePercent);
+      ctx.strokeStyle = `rgba(255, 150, 0, ${0.5 + chargePercent * 0.5})`;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      
+      // Draw trajectory preview
+      if (this.trajectoryPoints.length > 0 && chargePercent > 0.2) {
+        ctx.beginPath();
+        ctx.moveTo(this.trajectoryPoints[0].x - this.cameraX + this.width / 2, 
+                    this.trajectoryPoints[0].y - this.cameraY + this.height / 2);
+                    
+        for (let i = 1; i < this.trajectoryPoints.length; i++) {
+          const screenX = this.trajectoryPoints[i].x - this.cameraX + this.width / 2;
+          const screenY = this.trajectoryPoints[i].y - this.cameraY + this.height / 2;
+          ctx.lineTo(screenX, screenY);
+        }
+        
+        ctx.strokeStyle = `rgba(255, 200, 100, ${0.3 + chargePercent * 0.4})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw landing indicator
+        const lastPoint = this.trajectoryPoints[this.trajectoryPoints.length - 1];
+        if (lastPoint) {
+          const screenX = lastPoint.x - this.cameraX + this.width / 2;
+          const screenY = lastPoint.y - this.cameraY + this.height / 2;
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 100, 50, ${0.5})`;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 4, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 200, 100, 0.8)`;
+          ctx.fill();
+        }
+      }
+      
+      ctx.restore();
+    }
+  }
+
+  // Create a complete vertical gameplay sequence: mushroom launch pad → cloud staircase
+  createVerticalSequence(startX: number) {
+    const chainId = `seq_${Date.now()}_${Math.random()}`;
+
+    // Launch mushroom — wide so it's easy to land on, extra bouncy
+    const mushroomX = startX + 60;
+    const mushroomY = GROUND_Y - 20;
+    this.addMushroomPlatform(mushroomX, mushroomY, true, chainId);
+    const launchMushroom = this.platforms[this.platforms.length - 1];
+    launchMushroom.width = 110; // Extra wide for easy targeting
+
+    // Cloud zone: staircase going UP then back DOWN
+    // Physics: bounce vy≈-18.2, vx≈2-4, peak ~414 units above mushroom top (y≈30)
+    // Each cloud is extra wide so players catch it regardless of speed
+    const cloudConfigs: { dx: number; dy: number; w: number; tier: number }[] = [
+      { dx: 100, dy: -110, w: 230, tier: 1 }, // Low landing zone — very wide to catch all speeds
+      { dx: 310, dy: -180, w: 170, tier: 1 }, // Mid height
+      { dx: 470, dy: -255, w: 180, tier: 2 }, // Highest cloud (special reward here)
+      { dx: 630, dy: -205, w: 165, tier: 2 }, // Descending
+      { dx: 780, dy: -145, w: 160, tier: 1 }, // Final low cloud before return
+    ];
+
+    for (const cfg of cloudConfigs) {
+      const cx = mushroomX + cfg.dx;
+      const cy = GROUND_Y + cfg.dy;
+      this.addCloudPlatformTiered(cx, cy, cfg.w, cfg.tier, true, chainId);
+      // Leaf token centered above each cloud
+      this.collectibles.push({
+        x: cx + cfg.w / 2 - 12,
+        y: cy - 38,
+        width: 24, height: 24,
+        type: 'leafToken',
+        collected: false,
+        bobOffset: this.random() * Math.PI * 2,
+        sparkle: 0,
+      });
+    }
+
+    // Special power-up on the highest cloud (index 2)
+    const highCfg = cloudConfigs[2];
+    const specialTypes: Collectible['type'][] = ['star', 'leafWings', 'speedBoots', 'shield'];
+    this.collectibles.push({
+      x: mushroomX + highCfg.dx + highCfg.w * 0.72,
+      y: GROUND_Y + highCfg.dy - 38,
+      width: 24, height: 24,
+      type: specialTypes[Math.floor(this.random() * specialTypes.length)],
+      collected: false,
+      bobOffset: this.random() * Math.PI * 2,
+      sparkle: 0,
+    });
+
+    // Exit mushroom on the far side — same design as launch mushroom
+    const exitMushroomX = mushroomX + 920;
+    this.addMushroomPlatform(exitMushroomX, GROUND_Y - 20, true, chainId);
+    const exitMushroom = this.platforms[this.platforms.length - 1];
+    exitMushroom.width = 110;
+
+    return chainId;
+  }
+  spawnBounceRing(x: number, y: number, intensity: number) {
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      this.particles.push({
+        x, y,
+        vx: Math.cos(angle) * 2 * intensity,
+        vy: Math.sin(angle) * 2 * intensity - 2,
+        life: 20,
+        maxLife: 20,
+        color: `hsl(${30 + intensity * 30}, 100%, 60%)`,
+        size: 3 + intensity * 3,
+        type: 'sparkle',
+      });
+    }
+  }
+
+  // Add helper methods for mushroom colors
+  lightenColor(color: string, amount: number): string {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgb(${Math.min(255, r + amount)}, ${Math.min(255, g + amount)}, ${Math.min(255, b + amount)})`;
+  }
+
+  darkenColor(color: string, amount: number): string {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgb(${Math.max(0, r - amount)}, ${Math.max(0, g - amount)}, ${Math.max(0, b - amount)})`;
+  }
+
+  // Update vertical sequence handling in update method
+  updateVerticalProgression(dt: number) {
+    // Update cloud chain timer
+    if (this.cloudChainActive) {
+      this.cloudChainTimer -= dt * 60;
+      if (this.cloudChainTimer <= 0) {
+        this.cloudChainActive = false;
+        this.currentAirTier = 0;
+        this.spawnParticles(this.player.x, this.player.y, 15, '#FFD700', 'sparkle');
+      }
+    }
+    
+    // Reset mushroom chain when touching ground
+    const isOnGround = this.player.grounded && 
+      this.platforms.some(p => p.type === 'ground' && 
+        Math.abs(this.player.y - (this.player.y + this.player.height)) < 10);
+    
+    if (isOnGround && this.isOnMushroomChain) {
+      this.isOnMushroomChain = false;
+      this.mushroomChainCount = 0;
+    
+      // Bonus points for completing chain
+      if (this.mushroomChainCount > 2) {
+        const chainBonus = this.mushroomChainCount * 100;
+        this.state.score += chainBonus;
+        this.spawnParticles(this.player.x, this.player.y, 25, '#FFD700', 'combo');
+      }
+    }
+    
+    // Respawn used mushrooms after cooldown
+    for (const plat of this.platforms) {
+      if (plat.type === 'mushroom') {
+        const mushroom = plat as MushroomPlatform;
+        if (mushroom.hasBeenUsed) {
+          mushroom.respawnTimer += dt * 60;
+          if (mushroom.respawnTimer >= 120) { // 2 seconds respawn
+            mushroom.hasBeenUsed = false;
+            mushroom.respawnTimer = 0;
+            mushroom.bounceForce = JUMP_FORCE * 1.6;
+            this.spawnParticles(plat.x + plat.width / 2, plat.y, 8, '#FFD700', 'sparkle');
+          }
+        }
+      }
+    }
+  }
+
   updatePlayer(dt: number) {
     const p = this.player;
+
+    // Update jump charging
+    if (this.isChargingJump && p.grounded) {
+      this.jumpCharge = Math.min(1, this.jumpCharge + JUMP_CHARGE_RATE * dt);
+    }
 
     // Horizontal control
     const targetSpeeds = {
@@ -1087,6 +1423,14 @@ export class GameEngine {
           p.grounded = true;
           p.doubleJumped = false;
           p.gliding = false;
+          
+          // Cloud platform effect - slowly dissolves after standing on it
+          if (plat.type === 'cloud' && !(plat as any).isDissolving) {
+            (plat as any).isDissolving = true;
+            (plat as any).dissolveTimer = 300;
+            this.spawnParticles(p.x + p.width / 2, p.y + p.height, 10, '#AADDFF', 'sparkle');
+          }
+          
           if (plat.bouncy) {
             p.vy = JUMP_FORCE * 1.4;
             p.grounded = false;
@@ -1106,6 +1450,23 @@ export class GameEngine {
         p.squash = 0.8;
         p.stretch = 1.2;
       }
+    }
+
+    // Update cloud platform dissolving
+    for (const plat of this.platforms) {
+      if (plat.type === 'cloud' && (plat as any).dissolveTimer > 0) {
+        (plat as any).dissolveTimer -= dt;
+        if ((plat as any).dissolveTimer <= 0) {
+          // Remove dissolved cloud
+          const index = this.platforms.indexOf(plat);
+          if (index > -1) this.platforms.splice(index, 1);
+        }
+      }
+    }
+
+    // Update jump trajectory preview
+    if (this.showJumpTrajectory && p.grounded && this.isChargingJump) {
+      this.updateJumpTrajectory();
     }
 
     this.checkHazardCollision(p);
@@ -1398,26 +1759,28 @@ export class GameEngine {
   
   generateTerrain() {
     const ahead = this.player.x + CANVAS_WIDTH + 600;
-    const difficulty = Math.min(1, this.state.distance / 12000); // Faster difficulty for variety
+    const levelDifficulty = Math.min(1, this.state.distance / 12000);
     
     while (this.nextPlatformX < ahead) {
       // Level-based gap limits
       let maxGap = 55; // Default max gap
-      let floatingPlatformChance = 0.6;
+      let floatingPlatformChance = this.difficultyConfig.floatingPlatformChance;
       
       if (this.state.currentLevel === 1) {
         // Level 1: Easier gaps for beginners
-        maxGap = 35; // Reduce max gap to 35
-        floatingPlatformChance = 0.8; // More floating platforms
+        maxGap = 35;
+        floatingPlatformChance = Math.max(0.5, floatingPlatformChance);
       } else if (this.state.currentLevel === 2) {
         // Level 2: Moderate difficulty
-        maxGap = 45; // Moderate max gap
-        floatingPlatformChance = 0.6;
+        maxGap = 45;
+        floatingPlatformChance = Math.max(0.5, floatingPlatformChance);
       } else if (this.state.currentLevel >= 3) {
         // Level 3+: Full difficulty
-        maxGap = 55; // Full max gap
-        floatingPlatformChance = 0.4; // Fewer floating platforms
+        maxGap = 55;
       }
+
+      // Apply difficulty scaling to gaps
+      maxGap *= this.difficultyConfig.platformGapMultiplier;
       
       // Fair gap system: balanced for jump physics
       const gapRoll = this.random();
@@ -1438,8 +1801,8 @@ export class GameEngine {
         platformWidth = 160 + this.random() * 60; // Still wide for safety
       }
       
-      // Apply level-based cap
-      safeGap = Math.min(safeGap, maxGap);
+      // Apply level-based cap and difficulty scaling
+      safeGap = Math.min(safeGap * this.difficultyConfig.platformGapMultiplier, maxGap);
 
       // Guaranteed floating platforms for safety
       if (safeGap > 20) {
@@ -1478,7 +1841,7 @@ export class GameEngine {
       });
 
       // Always add some floating platforms for fun traversal options
-      if (this.random() < 0.6) {
+      if (this.random() < floatingPlatformChance) {
         this.addFloatingPlatform(
           this.nextPlatformX + safeGap + 30 + this.random() * (platformWidth - 60),
           BIOME_COLORS[this.state.biome]
@@ -1487,6 +1850,12 @@ export class GameEngine {
 
       // No extra spacing - gap is the actual gap between platforms
       this.nextPlatformX += safeGap + platformWidth;
+    }
+
+    // Cloud sequences: mushroom launch pad → cloud staircase (spaced every ~1800-2600 units)
+    while (this.nextCloudSequenceX < ahead) {
+      this.createVerticalSequence(this.nextCloudSequenceX);
+      this.nextCloudSequenceX += 1800 + this.random() * 800;
     }
 
     while (this.nextCollectibleX < ahead) {
@@ -1499,8 +1868,15 @@ export class GameEngine {
     }
 
     while (this.nextObstacleX < ahead) {
-      this.addObstacle(this.nextObstacleX);
-      this.nextObstacleX += 800 + this.random() * 600; // Very spaced out obstacles for relaxed gameplay
+      // Apply difficulty-based enemy spawn distance
+      const shouldSpawnEnemy = this.state.distance >= this.difficultyConfig.enemyStartDistance;
+      if (shouldSpawnEnemy) {
+        this.addObstacle(this.nextObstacleX);
+      }
+      // Calculate spacing based on difficulty: lower frequency = larger gaps
+      const baseSpacing = 800 + this.random() * 600;
+      const adjustedSpacing = baseSpacing / this.difficultyConfig.enemyFrequency;
+      this.nextObstacleX += adjustedSpacing;
     }
   }
 
@@ -1817,6 +2193,7 @@ export class GameEngine {
     this.renderObstacles(ctx);
     this.renderHazards(ctx);
     this.renderPlayer(ctx);
+    this.renderJumpCharge(ctx);
     this.renderParticles(ctx);
 
     // Vignette (in screen space)
@@ -1976,13 +2353,26 @@ export class GameEngine {
 // ... (rest of the code remains the same)
 
   drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
     const s = scale * 40;
+    // Soft radial gradient: bright white center → pale blue-grey edge
+    const grad = ctx.createRadialGradient(x, y - s * 0.2, s * 0.15, x + s * 0.5, y, s * 1.9);
+    grad.addColorStop(0,   'rgba(255,255,255,0.95)');
+    grad.addColorStop(0.45,'rgba(238,248,255,0.82)');
+    grad.addColorStop(1,   'rgba(200,222,242,0.55)');
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(x, y, s, 0, Math.PI * 2);
-    ctx.arc(x + s * 0.8, y - s * 0.3, s * 0.7, 0, Math.PI * 2);
-    ctx.arc(x + s * 1.4, y, s * 0.6, 0, Math.PI * 2);
-    ctx.arc(x - s * 0.5, y + s * 0.1, s * 0.5, 0, Math.PI * 2);
+    ctx.arc(x,              y,              s,        0, Math.PI * 2);
+    ctx.arc(x + s * 0.88,   y - s * 0.38,  s * 0.72, 0, Math.PI * 2);
+    ctx.arc(x + s * 1.55,   y,              s * 0.62, 0, Math.PI * 2);
+    ctx.arc(x - s * 0.55,   y + s * 0.05,  s * 0.52, 0, Math.PI * 2);
+    ctx.arc(x + s * 0.42,   y - s * 0.58,  s * 0.44, 0, Math.PI * 2);
+    ctx.arc(x + s * 1.18,   y - s * 0.48,  s * 0.38, 0, Math.PI * 2);
+    ctx.arc(x + s * 1.82,   y - s * 0.08,  s * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    // Top-left highlight for depth
+    ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.beginPath();
+    ctx.arc(x - s * 0.08, y - s * 0.22, s * 0.36, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -2085,38 +2475,147 @@ export class GameEngine {
       if (p.x > this.cameraX + CANVAS_WIDTH + 50 || p.x + p.width < this.cameraX - 50) continue;
 
       if (p.type === 'ground') {
-        // Ground with grass
-        const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + 40);
-        grad.addColorStop(0, '#5D8A3C');
-        grad.addColorStop(0.1, p.color);
-        grad.addColorStop(1, '#3E5A2B');
+        // Rich layered ground: bright grass cap → forest green → soil → dark roots
+        const displayHeight = Math.min(p.height, CANVAS_HEIGHT - p.y + 10);
+        const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + displayHeight);
+        grad.addColorStop(0,    '#72D44E');
+        grad.addColorStop(0.06, '#4E8E2A');
+        grad.addColorStop(0.25, p.color);
+        grad.addColorStop(0.6,  '#5A3D1A');
+        grad.addColorStop(1,    '#321E0A');
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.roundRect(p.x, p.y, p.width, Math.min(p.height, CANVAS_HEIGHT - p.y + 10), [8, 8, 0, 0]);
+        ctx.roundRect(p.x, p.y, p.width, displayHeight, [8, 8, 0, 0]);
         ctx.fill();
-        // Grass tufts
-        ctx.fillStyle = '#6ABF4B';
-        for (let gx = p.x + 5; gx < p.x + p.width - 5; gx += 12) {
+
+        // Bright top highlight strip
+        ctx.fillStyle = 'rgba(140,230,80,0.45)';
+        ctx.fillRect(p.x + 10, p.y + 1, p.width - 20, 3);
+
+        // Soil / grass divider line
+        ctx.strokeStyle = 'rgba(50,28,8,0.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y + 9);
+        ctx.lineTo(p.x + p.width, p.y + 9);
+        ctx.stroke();
+
+        // Varied grass tufts
+        ctx.fillStyle = '#7ED44E';
+        for (let gx = p.x + 4; gx < p.x + p.width - 4; gx += 10) {
+          const h = 5 + Math.sin(gx * 0.65 + 1.2) * 3;
           ctx.beginPath();
           ctx.moveTo(gx, p.y);
-          ctx.lineTo(gx + 3, p.y - 6);
-          ctx.lineTo(gx + 6, p.y);
+          ctx.lineTo(gx + 2, p.y - h);
+          ctx.lineTo(gx + 4, p.y - h * 0.55);
+          ctx.lineTo(gx + 7, p.y - h * 0.85);
+          ctx.lineTo(gx + 9, p.y);
+          ctx.fill();
+        }
+
+        // Embedded pebbles in soil layer
+        ctx.fillStyle = 'rgba(175,150,110,0.48)';
+        for (let gx = p.x + 18; gx < p.x + p.width - 8; gx += 32 + ((Math.floor(gx) * 7) % 18)) {
+          ctx.beginPath();
+          ctx.ellipse(gx, p.y + 19, 4, 2.5, 0.4, 0, Math.PI * 2);
           ctx.fill();
         }
       } else if (p.type === 'mushroom') {
-        // Mushroom platform
-        ctx.fillStyle = '#F5F5DC';
-        ctx.fillRect(p.x + p.width / 2 - 6, p.y, 12, 20);
-        ctx.fillStyle = p.color;
+        const cx = p.x + p.width / 2;
+        const capW = p.width / 2;
+        const capH = 18;
+
+        // Animated upward arrows (bounce indicator)
+        const arrowBob = Math.abs(Math.sin(this.state.gameTime * 0.07)) * 7;
+        ctx.save();
+        ctx.globalAlpha = 0.55 + Math.sin(this.state.gameTime * 0.07) * 0.3;
+        ctx.fillStyle = '#FFE840';
+        ctx.strokeStyle = '#C88800';
+        ctx.lineWidth = 1.5;
+        for (let ai = 0; ai < 2; ai++) {
+          const ay = p.y - 28 - ai * 14 - arrowBob;
+          ctx.beginPath();
+          ctx.moveTo(cx, ay - 9);
+          ctx.lineTo(cx - 7, ay + 1);
+          ctx.lineTo(cx - 2, ay + 1);
+          ctx.lineTo(cx - 2, ay + 6);
+          ctx.lineTo(cx + 2, ay + 6);
+          ctx.lineTo(cx + 2, ay + 1);
+          ctx.lineTo(cx + 7, ay + 1);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Stem with gradient
+        const stemGrad = ctx.createLinearGradient(cx - 8, p.y, cx + 8, p.y + 24);
+        stemGrad.addColorStop(0, '#F8F2D0');
+        stemGrad.addColorStop(0.5, '#E0D4A0');
+        stemGrad.addColorStop(1, '#BCA860');
+        ctx.fillStyle = stemGrad;
         ctx.beginPath();
-        ctx.ellipse(p.x + p.width / 2, p.y, p.width / 2, 16, 0, Math.PI, 0);
+        ctx.roundRect(cx - 8, p.y, 16, 24, [0, 0, 5, 5]);
         ctx.fill();
-        // Dots
-        ctx.fillStyle = '#FFF';
+        ctx.strokeStyle = 'rgba(120,90,30,0.35)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 8, p.y, 16, 24);
+
+        // Gills under cap (thin radial lines)
+        ctx.strokeStyle = 'rgba(160,40,40,0.30)';
+        ctx.lineWidth = 1;
+        for (let gi = -4; gi <= 4; gi++) {
+          const t = gi / 4;
+          const gx = cx + t * capW * 0.9;
+          const capTopY = p.y - capH * Math.sqrt(Math.max(0, 1 - t * t));
+          ctx.beginPath();
+          ctx.moveTo(gx, p.y + 1);
+          ctx.lineTo(gx, capTopY);
+          ctx.stroke();
+        }
+
+        // Cap with radial gradient (bright highlight top-left, dark edge)
+        const capGrad = ctx.createRadialGradient(cx - capW * 0.25, p.y - capH * 0.6, 3, cx, p.y, capW);
+        capGrad.addColorStop(0, '#FF9090');
+        capGrad.addColorStop(0.35, p.color);
+        capGrad.addColorStop(1, '#8B0A0A');
+        ctx.fillStyle = capGrad;
         ctx.beginPath();
-        ctx.arc(p.x + p.width / 2 - 10, p.y - 8, 4, 0, Math.PI * 2);
-        ctx.arc(p.x + p.width / 2 + 8, p.y - 6, 3, 0, Math.PI * 2);
+        ctx.ellipse(cx, p.y, capW, capH, 0, Math.PI, 0);
         ctx.fill();
+        // Cap outline
+        ctx.strokeStyle = 'rgba(100,0,0,0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, p.y, capW, capH, 0, Math.PI, 0);
+        ctx.stroke();
+
+        // White spots — shadow then bright
+        const spots = [
+          { ox: -capW * 0.28, oy: -capH * 0.58, r: 5.5 },
+          { ox: capW * 0.32, oy: -capH * 0.48, r: 4.5 },
+          { ox: 0,            oy: -capH * 0.82, r: 4.5 },
+          { ox: -capW * 0.52, oy: -capH * 0.28, r: 3.5 },
+          { ox: capW * 0.55,  oy: -capH * 0.22, r: 3.5 },
+        ];
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        for (const s of spots) {
+          ctx.beginPath();
+          ctx.arc(cx + s.ox + 1, p.y + s.oy + 1, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#FFFFFF';
+        for (const s of spots) {
+          ctx.beginPath();
+          ctx.arc(cx + s.ox, p.y + s.oy, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        for (const s of spots) {
+          ctx.beginPath();
+          ctx.arc(cx + s.ox - 1, p.y + s.oy - 1.5, s.r * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (p.type === 'floating') {
         ctx.fillStyle = p.color;
         ctx.beginPath();
@@ -2186,6 +2685,80 @@ export class GameEngine {
             ctx.strokeRect(bx + ((by / 15) % 2 ? 10 : 0), by, 20, 15);
           }
         }
+      } else if (p.type === 'cloud') {
+        // Playable cloud platform — fluffy bumps, flat tinted base, sparkle glints
+        const floatOffset = (p as any).floatOffset || 0;
+        const floatY = p.y + Math.sin(this.state.gameTime * ((p as any).floatSpeed || 0.8) + floatOffset) * 4;
+        const dissolve = (p as any).dissolveTimer || 0;
+        // Opacity: stays solid until last 60 frames, then fades out
+        const opacity = dissolve > 0 ? Math.min(1, dissolve / 60) : 1;
+
+        ctx.save();
+        ctx.globalAlpha = opacity;
+
+        // Soft drop shadow beneath
+        ctx.fillStyle = 'rgba(90,130,200,0.20)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + p.width / 2 + 4, floatY + p.height + 7, p.width * 0.44, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flat blue-tinted base (makes the cloud read as a solid platform)
+        ctx.fillStyle = 'rgba(185,215,245,0.88)';
+        ctx.beginPath();
+        ctx.roundRect(p.x + 6, floatY + p.height * 0.55, p.width - 12, p.height * 0.52, [0, 0, 7, 7]);
+        ctx.fill();
+
+        // Main cloud body — radial gradient
+        const cloudGrad = ctx.createRadialGradient(
+          p.x + p.width * 0.34, floatY + p.height * 0.18, 5,
+          p.x + p.width * 0.50, floatY + p.height * 0.48, p.width * 0.62
+        );
+        cloudGrad.addColorStop(0,    'rgba(255,255,255,1.00)');
+        cloudGrad.addColorStop(0.42, 'rgba(243,251,255,0.97)');
+        cloudGrad.addColorStop(1,    'rgba(210,232,250,0.90)');
+        ctx.fillStyle = cloudGrad;
+
+        // Five fluffy bumps across the top + two wider bottom fills
+        ctx.beginPath();
+        ctx.ellipse(p.x + p.width * 0.11, floatY + p.height * 0.65, p.width * 0.135, p.height * 0.75, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x + p.width * 0.27, floatY + p.height * 0.38, p.width * 0.17,  p.height * 0.92, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x + p.width * 0.50, floatY + p.height * 0.28, p.width * 0.20,  p.height * 1.05, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x + p.width * 0.73, floatY + p.height * 0.36, p.width * 0.17,  p.height * 0.92, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x + p.width * 0.89, floatY + p.height * 0.62, p.width * 0.135, p.height * 0.75, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x + p.width * 0.36, floatY + p.height * 0.72, p.width * 0.27,  p.height * 0.55, 0, 0, Math.PI * 2);
+        ctx.ellipse(p.x + p.width * 0.64, floatY + p.height * 0.72, p.width * 0.27,  p.height * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright top-left highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.62)';
+        ctx.beginPath();
+        ctx.ellipse(p.x + p.width * 0.30, floatY + p.height * 0.20, p.width * 0.115, p.height * 0.30, -0.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Twinkling glints (pulse with gameTime)
+        const glintXs = [0.18, 0.50, 0.82];
+        for (const gx of glintXs) {
+          const pulse = 0.5 + Math.sin(this.state.gameTime * 0.11 + gx * 6.2) * 0.5;
+          if (pulse > 0.65) {
+            ctx.fillStyle = `rgba(255,255,255,${0.55 + pulse * 0.35})`;
+            ctx.beginPath();
+            ctx.arc(p.x + p.width * gx, floatY + p.height * 0.15, 1.5 + pulse * 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Fade-out mist particles when dissolving
+        if (dissolve > 0 && dissolve < 80) {
+          ctx.globalAlpha = opacity * 0.45;
+          ctx.fillStyle = 'rgba(200,230,255,0.7)';
+          for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.arc(p.x + (i + 0.5) * (p.width / 4), floatY + Math.sin(i * 1.4) * p.height * 0.4, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        ctx.restore();
       }
     }
   }
@@ -2436,6 +3009,22 @@ export class GameEngine {
       }
 
       ctx.restore();
+
+      // Draw enemy warning indicator if enabled and enemy is close
+      if (this.difficultyConfig.showEnemyWarnings) {
+        const distToEnemy = Math.hypot(o.x - this.player.x, o.y - this.player.y);
+        if (distToEnemy < 400) {
+          // Draw warning ring
+          const warningIntensity = 1 - (distToEnemy / 400);
+          ctx.save();
+          ctx.strokeStyle = `rgba(255, 100, 100, ${warningIntensity * 0.6})`;
+          ctx.lineWidth = 2 + warningIntensity * 2;
+          ctx.beginPath();
+          ctx.arc(o.x + o.width / 2, o.y + o.height / 2, 50 + warningIntensity * 20, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
   }
 

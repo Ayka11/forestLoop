@@ -100,10 +100,10 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
   const Icon = config.icon;
 
   return (
-    <div className="fixed top-4 right-4 z-50 pointer-events-none">
+    <div className="fixed top-20 right-4 z-50 pointer-events-none sm:top-24">
       <div 
         className={`
-          relative px-4 py-3 rounded-xl shadow-xl border
+          relative min-w-[15rem] px-4 py-3 rounded-xl shadow-xl border
           bg-gradient-to-br ${config.bgGradient} ${config.borderColor}
           transform transition-all duration-500 ease-out pointer-events-auto
           ${isAnimating ? 'scale-105 opacity-100 translate-x-0' : 'scale-95 opacity-0 translate-x-4'}
@@ -111,7 +111,7 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
         style={{
           boxShadow: `0 0 20px ${config.color}40, 0 0 40px ${config.color}20`,
           backdropFilter: 'blur(8px)',
-          minWidth: '280px'
+          minWidth: '240px'
         }}
       >
         {/* Close button */}
