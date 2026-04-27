@@ -604,10 +604,12 @@ export class GameEngine {
   const biome = BIOME_COLORS[this.state.biome];
   const viewportWidth = Math.max(CANVAS_WIDTH, this.width);
   
-  // Generate initial ground platforms - continuous, no gaps, wider for safe start
+  // Generate initial ground platforms - continuous, no gaps, extra wide for safe start
+  // Level 1: extend further to give players a smooth runway
+  const initialExtent = this.state.currentLevel === 1 ? viewportWidth * 3 : viewportWidth * 2;
   let currentX = 400;
-  while (currentX < viewportWidth * 2) {
-    const platformWidth = 280 + this.random() * 120;
+  while (currentX < initialExtent) {
+    const platformWidth = 320 + this.random() * 160;
     
     this.platforms.push({
       x: currentX,
@@ -643,8 +645,11 @@ export class GameEngine {
       type = 'log'; // 20% chance for log
     }
     
-    const y = GROUND_Y - 100 - this.random() * 200;
-    const w = type === 'mushroom' ? 70 : 90 + this.random() * 120; // Slightly larger
+    // Level 1: platforms closer to ground and wider for safety
+    const heightRange = this.state.currentLevel === 1 ? 120 : 200;
+    const y = GROUND_Y - 80 - this.random() * heightRange;
+    const widthBonus = this.state.currentLevel === 1 ? 40 : 0;
+    const w = type === 'mushroom' ? 70 + widthBonus : 90 + this.random() * 120 + widthBonus;
     const colors: Record<string, string> = {
       floating: biome.trees[2], mushroom: '#FF6B6B', vine: '#4CAF50', log: '#8D6E63',
       pastel: '#FFC1E3', gumdrop: '#FFB6C1', ice: '#B3EFFF', snow: '#E0F7FA', lava: '#FF7043', crystal: '#FF8A65', cloud: '#E3F6FF', rainbow: '#B3E5FC',
@@ -1768,8 +1773,8 @@ export class GameEngine {
       
       if (this.state.currentLevel === 1) {
         // Level 1: Very forgiving for beginners
-        maxGap = 22;
-        floatingPlatformChance = Math.max(0.7, floatingPlatformChance);
+        maxGap = 16;
+        floatingPlatformChance = Math.max(0.85, floatingPlatformChance);
       } else if (this.state.currentLevel === 2) {
         // Level 2: Moderate difficulty
         maxGap = 45;
@@ -1788,13 +1793,20 @@ export class GameEngine {
       let platformWidth: number;
       
       if (this.state.currentLevel === 1) {
-        // Level 1: Extra forgiving gaps and wider platforms
-        if (gapRoll < 0.80) {
-          safeGap = 3 + this.random() * 10; // 3-13 units (trivial)
-          platformWidth = 240 + this.random() * 120; // Very wide
+        // Level 1: Progressive gaps — start tiny, grow slowly with distance
+        const distProgress = Math.min(1, this.state.distance / 3000);
+        if (gapRoll < 0.60) {
+          // 60% nearly flat — platforms almost touching
+          safeGap = 2 + this.random() * 4; // 2-6 units (barely a gap)
+          platformWidth = 280 + this.random() * 140; // Extra wide 280-420
+        } else if (gapRoll < 0.90) {
+          // 30% small gaps that scale with distance
+          safeGap = 4 + this.random() * 6 + distProgress * 4; // 4-14 units
+          platformWidth = 240 + this.random() * 120; // Wide 240-360
         } else {
-          safeGap = 10 + this.random() * 12; // 10-22 units (easy jump)
-          platformWidth = 200 + this.random() * 100;
+          // 10% moderate gaps (only appear as player progresses)
+          safeGap = 6 + this.random() * 4 + distProgress * 6; // 6-16 units
+          platformWidth = 220 + this.random() * 100;
         }
       } else if (gapRoll < 0.70) {
         // 70% small gaps - easily walkable/jumpable
@@ -1814,8 +1826,9 @@ export class GameEngine {
       safeGap = Math.min(safeGap * this.difficultyConfig.platformGapMultiplier, maxGap);
 
       // Guaranteed floating platforms for safety
-      if (safeGap > 20) {
-        // Always add floating platform for gaps > 20 units
+      const safetyThreshold = this.state.currentLevel === 1 ? 10 : 20;
+      if (safeGap > safetyThreshold) {
+        // Always add floating platform over larger gaps
         this.addFloatingPlatform(
           this.nextPlatformX + safeGap * 0.5,
           BIOME_COLORS[this.state.biome]
@@ -1829,7 +1842,8 @@ export class GameEngine {
       }
       
       // Add extra safety platform for largest gaps
-      if (safeGap > 30) {
+      const extraSafetyThreshold = this.state.currentLevel === 1 ? 14 : 30;
+      if (safeGap > extraSafetyThreshold) {
         this.addFloatingPlatform(
           this.nextPlatformX + safeGap * 0.25,
           BIOME_COLORS[this.state.biome]
@@ -2316,103 +2330,82 @@ export class GameEngine {
   }
 
   renderBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
-    // Render background in screen space with bidirectional parallax and smooth transitions
+    // Render background with infinite tiling parallax layers
     
-    // During transition, render both current and target biome backgrounds with opacity
     const renderBiomeLayers = (layers: typeof this.bgLayers, opacity: number) => {
       ctx.globalAlpha = opacity;
-      
-      // Camera-relative rendering: generate positions around current camera
       const camX = this.cameraX;
-      const camY = this.cameraY;
-      
-      // Clouds layer (index 3) - Backmost layer, slowest parallax
-      const cloudLayer = layers[3];
-      if (cloudLayer) {
-        for (const el of cloudLayer.elements) {
-          const parallaxX = camX * 0.03; // Very slow parallax
-          const x = el.x - parallaxX;
-          // Camera-relative wrapping with extended coverage
-          const viewRange = w + 1200; // Increased from w + 800
-          const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
-          for (let pos = startPos; pos < startPos + viewRange; pos += 200) {
-            if (pos >= x - 600 && pos <= x + 600) { // Increased buffer
-              this.drawCloud(ctx, pos, el.y, el.scale);
+
+      // Helper: render a layer with seamless infinite tiling
+      const renderTiledLayer = (
+        layer: typeof layers[0] | undefined,
+        parallaxSpeed: number,
+        drawElement: (screenX: number, el: BackgroundElement) => void,
+      ) => {
+        if (!layer || layer.elements.length === 0) return;
+        const elements = layer.elements;
+        // Tile width = span of all elements + spacing for seamless wrap
+        const lastEl = elements[elements.length - 1];
+        const spacing = elements.length > 1 ? elements[1].x - elements[0].x : 200;
+        const tileWidth = lastEl.x + spacing;
+        if (tileWidth <= 0) return;
+
+        const parallaxOffset = camX * parallaxSpeed;
+        const screenLeft = parallaxOffset - 300;
+        const screenRight = parallaxOffset + w + 300;
+        const firstTile = Math.floor(screenLeft / tileWidth);
+        const lastTile = Math.floor(screenRight / tileWidth);
+
+        for (let tile = firstTile; tile <= lastTile; tile++) {
+          const tileOffset = tile * tileWidth;
+          for (const el of elements) {
+            const screenX = el.x + tileOffset - parallaxOffset;
+            if (screenX >= -300 && screenX <= w + 300) {
+              drawElement(screenX, el);
             }
           }
         }
-      }
+      };
+
+      // Clouds layer (index 3) - Backmost, slowest parallax
+      renderTiledLayer(layers[3], 0.03, (screenX, el) => {
+        this.drawCloud(ctx, screenX, el.y, el.scale);
+      });
 
       // Mountains layer (index 2) - Behind trees, slow parallax
-      const mtLayer = layers[2];
-      if (mtLayer) {
-        for (const el of mtLayer.elements) {
-          const parallaxX = camX * 0.08; // Slow parallax
-          const x = el.x - parallaxX;
-          // Camera-relative wrapping
-          const viewRange = w + 900; // Increased from w + 600
-          const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
-          for (let pos = startPos; pos < startPos + viewRange; pos += 180) {
-            if (pos >= x - 450 && pos <= x + 450) { // Increased buffer
-              this.drawMountain(ctx, pos, h * 0.5, el.scale, el.color);
-            }
-          }
+      renderTiledLayer(layers[2], 0.08, (screenX, el) => {
+        if (el.type === 'mountain') {
+          this.drawMountain(ctx, screenX, h * 0.5, el.scale, el.color);
+        } else {
+          this.drawTree(ctx, screenX, h * 0.55, el.scale * 1.2, el.color, el.variant);
         }
-      }
+      });
 
-      // Mid trees layer (index 1) - In front of mountains, medium parallax
-      const treeLayer = layers[1];
-      if (treeLayer) {
-        for (const el of treeLayer.elements) {
-          const parallaxX = camX * 0.25; // Medium parallax
-          const x = el.x - parallaxX;
-          // Camera-relative wrapping
-          const viewRange = w + 600; // Increased from w + 400
-          const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
-          for (let pos = startPos; pos < startPos + viewRange; pos += 110) {
-            if (pos >= x - 300 && pos <= x + 300) { // Increased buffer
-              this.drawTree(ctx, pos, h * 0.55, el.scale * 1.5, el.color, el.variant);
-            }
-          }
-        }
-      }
+      // Mid trees layer (index 1) - Medium parallax
+      renderTiledLayer(layers[1], 0.25, (screenX, el) => {
+        this.drawTree(ctx, screenX, h * 0.55, el.scale * 1.5, el.color, el.variant);
+      });
 
-      // Near bushes + flowers layer (index 0) - Frontmost layer, fastest parallax
-      const nearLayer = layers[0];
-      if (nearLayer) {
-        for (const el of nearLayer.elements) {
-          const parallaxX = camX * 0.45; // Fast parallax
-          const x = el.x - parallaxX;
-          // Camera-relative wrapping
-          const viewRange = w + 400; // Increased from w + 200
-          const startPos = Math.floor(x / viewRange) * viewRange - viewRange/2;
-          for (let pos = startPos; pos < startPos + viewRange; pos += 70) {
-            if (pos >= x - 200 && pos <= x + 200) { // Increased buffer
-              if (el.type === 'bush') {
-                this.drawBush(ctx, pos, GROUND_Y - 10, el.scale, el.color);
-              } else if (el.type === 'mushroom') {
-                this.drawMushroomBg(ctx, pos, GROUND_Y - 12, el.scale, el.color);
-              } else {
-                this.drawFlowerBg(ctx, pos, GROUND_Y - 8, el.scale, el.color);
-              }
-            }
-          }
+      // Near bushes + flowers layer (index 0) - Frontmost, fastest parallax
+      renderTiledLayer(layers[0], 0.45, (screenX, el) => {
+        if (el.type === 'bush') {
+          this.drawBush(ctx, screenX, GROUND_Y - 10, el.scale, el.color);
+        } else if (el.type === 'mushroom') {
+          this.drawMushroomBg(ctx, screenX, GROUND_Y - 12, el.scale, el.color);
+        } else {
+          this.drawFlowerBg(ctx, screenX, GROUND_Y - 8, el.scale, el.color);
         }
-      }
+      });
     };
     
     if (this.state.isTransitioning && this.state.transitioningBiome && this.preservedBgLayers.length > 0) {
-      // Render current biome (fading out)
       renderBiomeLayers(this.preservedBgLayers, 1 - this.state.transitionProgress);
-      
-      // Render target biome (fading in)
       renderBiomeLayers(this.bgLayers, this.state.transitionProgress);
     } else {
-      // Normal rendering
       renderBiomeLayers(this.bgLayers, 1);
     }
     
-    ctx.globalAlpha = 1; // Reset opacity
+    ctx.globalAlpha = 1;
   }
 
 // ... (rest of the code remains the same)
@@ -3433,24 +3426,26 @@ export class GameEngine {
 export const levels = [
   {
     platforms: [
-      { x: 0, y: GROUND_Y, width: 350 },
-      { x: 360, y: GROUND_Y, width: 280 },
-      { x: 660, y: GROUND_Y, width: 300 },
-      { x: 330, y: GROUND_Y - 80, width: 100 },
-      { x: 550, y: GROUND_Y - 120, width: 90 },
+      { x: 0, y: GROUND_Y, width: 500 },
+      { x: 504, y: GROUND_Y, width: 400 },
+      { x: 908, y: GROUND_Y, width: 350 },
+      { x: 400, y: GROUND_Y - 70, width: 120 },
+      { x: 700, y: GROUND_Y - 100, width: 110 },
     ],
     enemies: [],
     coins: [
-      { x: 150, y: GROUND_Y - 40 },
-      { x: 250, y: GROUND_Y - 40 },
-      { x: 370, y: GROUND_Y - 100 },
-      { x: 500, y: GROUND_Y - 40 },
-      { x: 600, y: GROUND_Y - 140 },
-      { x: 750, y: GROUND_Y - 40 },
+      { x: 120, y: GROUND_Y - 40 },
+      { x: 240, y: GROUND_Y - 40 },
+      { x: 360, y: GROUND_Y - 40 },
+      { x: 540, y: GROUND_Y - 40 },
+      { x: 660, y: GROUND_Y - 40 },
+      { x: 780, y: GROUND_Y - 40 },
+      { x: 900, y: GROUND_Y - 40 },
+      { x: 1050, y: GROUND_Y - 40 },
     ],
     powerUps: [
       { x: 450, y: GROUND_Y - 40, type: 'shield' },
-      { x: 800, y: GROUND_Y - 40, type: 'mushroom_powerup' },
+      { x: 850, y: GROUND_Y - 40, type: 'mushroom_powerup' },
     ],
   },
   {
