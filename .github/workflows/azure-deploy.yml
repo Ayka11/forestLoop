@@ -9,6 +9,7 @@ on:
 env:
   AZURE_SITE_NAME: forestloop
   NODE_VERSION: '22.x'
+  AZURE_WEBAPP_PACKAGE_PATH: 'dist'
 
 jobs:
   build-and-deploy:
@@ -36,66 +37,21 @@ jobs:
       - name: Build application
         run: npm run build:azure
       
-      - name: Archive build artifacts
-        # Zip the CONTENTS of dist, not the folder itself, so index.html is at the root of the zip
-        run: |
-          cd dist
-          zip -r -q ../deploy.zip .
-          cd ..
-      
+      - name: Deploy to Azure App Service
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_SITE_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Test credentials
+      - name: Verify deployment
         if: success()
         run: |
-          echo "Testing Kudu API authentication..."
-          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/" 2>&1 | grep -E "(HTTP|401|200|credentials|authentication)" || true
-          echo "Credentials test complete"
-
-      - name: Clean wwwroot before deploy
-        if: success()
-        run: |
-          curl -X DELETE -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/?recursive=true"
-
-      - name: Deploy to Azure
-        if: success()
-        run: |
-          echo "Starting deployment..."
-          DEPLOY_RESPONSE=$(curl -X POST \
-            -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            -H "Content-Type: application/zip" \
-            --data-binary @deploy.zip \
-            -w "\n%{http_code}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy")
-          echo "Deployment Response:"
-          echo "$DEPLOY_RESPONSE"
-          HTTP_CODE=$(echo "$DEPLOY_RESPONSE" | tail -n 1)
-          echo "HTTP Status Code: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "202" ]; then
-            echo "Deployment failed with HTTP $HTTP_CODE"
-            exit 1
-          fi
-          echo "Deployment API call completed. Waiting 10 seconds for files to be written..."
-          sleep 10
-
-      - name: List deployed files via Kudu
-        if: success()
-        run: |
-          echo "=== Deployment Diagnostics ==="
-          echo "Listing actual directory contents in wwwroot via Kudu API..."
-          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/"
-          echo ""
-          echo "Checking for index.html via Kudu..."
-          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/index.html" | head -c 500
-          echo ""
-          echo "Checking for web.config via Kudu..."
-          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/web.config" | head -c 500
-          echo ""
-          echo "Attempting to access index.html via HTTPS..."
-          curl -v https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 500
+          echo "Deployment completed successfully"
+          echo "App URL: https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net"
+          sleep 5
+          curl -s https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200
       
       - name: Deployment summary
         if: always()
