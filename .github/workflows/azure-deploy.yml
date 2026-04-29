@@ -1,0 +1,60 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - updated
+  workflow_dispatch:
+
+env:
+  AZURE_SITE_NAME: forestloop
+  NODE_VERSION: '22.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint code
+        run: npm run lint
+      
+      - name: Build application
+        run: npm run build:azure
+      
+      - name: Archive build artifacts
+        run: |
+          cd dist
+          zip -r -q ../deploy.zip .
+          cd ..
+      
+      - name: Deploy to Azure
+        if: success()
+        run: |
+          curl -X POST \
+            -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @deploy.zip \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy"
+      
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "## Deployment Status"
+          echo "- **App Name**: ${{ env.AZURE_SITE_NAME }}"
+          echo "- **URL**: https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net"
+          echo "- **Status**: ${{ job.status }}"
