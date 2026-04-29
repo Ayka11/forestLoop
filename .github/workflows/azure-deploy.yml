@@ -37,6 +37,7 @@ jobs:
         run: npm run build:azure
       
       - name: Archive build artifacts
+        # Zip the CONTENTS of dist, not the folder itself, so index.html is at the root of the zip
         run: |
           cd dist
           zip -r -q ../deploy.zip .
@@ -50,6 +51,12 @@ jobs:
             -H "Content-Type: application/zip" \
             --data-binary @deploy.zip \
             "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy"
+
+      - name: Verify deployment (index.html check)
+        if: success()
+        run: |
+          echo "Checking if index.html exists in Azure App Service..."
+          curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200
       
       - name: Deployment summary
         if: always()
