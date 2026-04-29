@@ -14,8 +14,9 @@ lerna-debug.log*
 
 # Build outputs
 node_modules
-dist
 dist-ssr
+dist/
+!dist/web.config
 *.local
 
 # Editor directories and files
