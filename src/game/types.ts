@@ -281,12 +281,12 @@ export interface DifficultyConfig {
 
 // ===== CONSTANTS ====
 
-export const GRAVITY = 0.4;
-export const JUMP_FORCE = -13;
-export const DOUBLE_JUMP_FORCE = -11;
-export const GLIDE_GRAVITY = 0.15;
-export const COYOTE_TIME = 0.12; // 120ms window after leaving platform
-export const JUMP_BUFFER_TIME = 0.15; // 150ms input buffer
+export const GRAVITY = 0.38;
+export const JUMP_FORCE = -14;
+export const DOUBLE_JUMP_FORCE = -12;
+export const GLIDE_GRAVITY = 0.13;
+export const COYOTE_TIME = 0.18; // 180ms window after leaving platform (more forgiving)
+export const JUMP_BUFFER_TIME = 0.18; // 180ms input buffer (more forgiving)
 export const PLAYER_SPEED = 0;
 export const BASE_SCROLL_SPEED = 4;
 export const MAX_SCROLL_SPEED = 8;
@@ -370,7 +370,7 @@ export interface BiomeConfig {
 
 export const BIOME_COLORS: Record<BiomeType, BiomeConfig> = {
   enchanted: {
-    sky: ['#87CEEB', '#B0E0E6', '#98FB98'],
+    sky: ['#5BC0F8', '#A8E6CF', '#FFEAA7'],
     ground: '#4A7C3F',
     accent: '#FFD700',
     trees: ['#2D5A1E', '#3A7D2C', '#4CAF50', '#66BB6A'],
@@ -474,8 +474,8 @@ export interface CloudPlatform extends Platform {
 }
 
 // Add jump power variables
-export const MIN_JUMP_FORCE = 8;
-export const MAX_JUMP_FORCE = 18;
+export const MIN_JUMP_FORCE = 10;
+export const MAX_JUMP_FORCE = 19;
 export const JUMP_CHARGE_RATE = 0.35; // per frame
 
 // Add new platform types for better tracking

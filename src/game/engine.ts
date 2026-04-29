@@ -604,10 +604,10 @@ export class GameEngine {
   const biome = BIOME_COLORS[this.state.biome];
   const viewportWidth = Math.max(CANVAS_WIDTH, this.width);
   
-  // Generate initial ground platforms - continuous, no gaps
+  // Generate initial ground platforms - continuous, no gaps, wider for safe start
   let currentX = 400;
-  while (currentX < viewportWidth * 1.5) {
-    const platformWidth = 200 + this.random() * 80;
+  while (currentX < viewportWidth * 2) {
+    const platformWidth = 280 + this.random() * 120;
     
     this.platforms.push({
       x: currentX,
@@ -621,12 +621,11 @@ export class GameEngine {
     currentX += platformWidth;
   }
   
-  // Update next platform X to continue from where we left off
   this.nextPlatformX = currentX;
   
-  // Add some collectibles
-  for (let i = 0; i < 12; i++) {
-    this.addCollectible(300 + i * 130 + this.random() * 60, biome);
+  // More collectibles at start for rewarding early gameplay
+  for (let i = 0; i < 16; i++) {
+    this.addCollectible(300 + i * 110 + this.random() * 50, biome);
   }
 }
 
@@ -805,9 +804,10 @@ export class GameEngine {
 }
 
   private pickRandomBiome(): BiomeType {
+    // Level 1 always starts in the enchanted forest for a welcoming experience
+    if (this.state.currentLevel <= 1) return 'enchanted';
     const unlocked = this.state.unlockedBiomes;
     if (!unlocked || unlocked.length === 0) return 'enchanted';
-    // Filter out candy biome
     const availableBiomes = unlocked.filter(biome => biome !== 'candy');
     return availableBiomes[Math.floor(this.random() * availableBiomes.length)];
   }
@@ -1767,9 +1767,9 @@ export class GameEngine {
       let floatingPlatformChance = this.difficultyConfig.floatingPlatformChance;
       
       if (this.state.currentLevel === 1) {
-        // Level 1: Easier gaps for beginners
-        maxGap = 35;
-        floatingPlatformChance = Math.max(0.5, floatingPlatformChance);
+        // Level 1: Very forgiving for beginners
+        maxGap = 22;
+        floatingPlatformChance = Math.max(0.7, floatingPlatformChance);
       } else if (this.state.currentLevel === 2) {
         // Level 2: Moderate difficulty
         maxGap = 45;
@@ -1787,7 +1787,16 @@ export class GameEngine {
       let safeGap: number;
       let platformWidth: number;
       
-      if (gapRoll < 0.70) {
+      if (this.state.currentLevel === 1) {
+        // Level 1: Extra forgiving gaps and wider platforms
+        if (gapRoll < 0.80) {
+          safeGap = 3 + this.random() * 10; // 3-13 units (trivial)
+          platformWidth = 240 + this.random() * 120; // Very wide
+        } else {
+          safeGap = 10 + this.random() * 12; // 10-22 units (easy jump)
+          platformWidth = 200 + this.random() * 100;
+        }
+      } else if (gapRoll < 0.70) {
         // 70% small gaps - easily walkable/jumpable
         safeGap = 5 + this.random() * 15; // 5-20 units (much safer)
         platformWidth = 200 + this.random() * 100; // Much wider platforms
@@ -1868,13 +1877,14 @@ export class GameEngine {
     }
 
     while (this.nextObstacleX < ahead) {
-      // Apply difficulty-based enemy spawn distance
-      const shouldSpawnEnemy = this.state.distance >= this.difficultyConfig.enemyStartDistance;
+      // Level 1: delay enemies until player has had time to learn controls
+      const level1EnemyDelay = this.state.currentLevel === 1 ? 600 : 0;
+      const shouldSpawnEnemy = this.state.distance >= (this.difficultyConfig.enemyStartDistance + level1EnemyDelay);
       if (shouldSpawnEnemy) {
         this.addObstacle(this.nextObstacleX);
       }
-      // Calculate spacing based on difficulty: lower frequency = larger gaps
-      const baseSpacing = 800 + this.random() * 600;
+      // Level 1: much wider spacing between enemies
+      const baseSpacing = this.state.currentLevel === 1 ? 1200 + this.random() * 800 : 800 + this.random() * 600;
       const adjustedSpacing = baseSpacing / this.difficultyConfig.enemyFrequency;
       this.nextObstacleX += adjustedSpacing;
     }
@@ -2207,14 +2217,11 @@ export class GameEngine {
   }
 
   renderSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
-    // Handle smooth sky transitions
     let colors = BIOME_COLORS[this.state.biome].sky;
     
     if (this.state.isTransitioning && this.state.transitioningBiome) {
       const targetColors = BIOME_COLORS[this.state.transitioningBiome].sky;
       const progress = this.state.transitionProgress;
-      
-      // Blend colors between current and target biome
       colors = colors.map((color, i) => {
         const targetColor = targetColors[i];
         return this.blendColors(color, targetColor, progress);
@@ -2227,6 +2234,64 @@ export class GameEngine {
     grad.addColorStop(1, colors[2]);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
+
+    // Sun with glow for enchanted/autumn biomes
+    if (this.state.biome === 'enchanted' || this.state.biome === 'autumn') {
+      const sunX = w * 0.82;
+      const sunY = h * 0.13;
+      const pulse = 1 + Math.sin(this.state.gameTime * 0.02) * 0.06;
+
+      // Outer glow
+      const sunGlow = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 90 * pulse);
+      sunGlow.addColorStop(0, 'rgba(255,245,157,0.55)');
+      sunGlow.addColorStop(0.5, 'rgba(255,236,130,0.18)');
+      sunGlow.addColorStop(1, 'rgba(255,236,130,0)');
+      ctx.fillStyle = sunGlow;
+      ctx.fillRect(sunX - 100, sunY - 100, 200, 200);
+
+      // Sun rays
+      ctx.save();
+      ctx.globalAlpha = 0.12 + Math.sin(this.state.gameTime * 0.015) * 0.05;
+      ctx.strokeStyle = '#FFF59D';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2 + this.state.gameTime * 0.003;
+        const innerR = 28 * pulse;
+        const outerR = 55 + Math.sin(angle * 3 + this.state.gameTime * 0.02) * 12;
+        ctx.beginPath();
+        ctx.moveTo(sunX + Math.cos(angle) * innerR, sunY + Math.sin(angle) * innerR);
+        ctx.lineTo(sunX + Math.cos(angle) * outerR, sunY + Math.sin(angle) * outerR);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Sun core
+      const sunCore = ctx.createRadialGradient(sunX - 4, sunY - 4, 2, sunX, sunY, 22 * pulse);
+      sunCore.addColorStop(0, 'rgba(255,255,240,0.98)');
+      sunCore.addColorStop(0.6, 'rgba(255,238,88,0.92)');
+      sunCore.addColorStop(1, 'rgba(255,202,40,0.7)');
+      ctx.fillStyle = sunCore;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 22 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Floating sparkles for enchanted/firefly biomes
+    if (this.state.biome === 'enchanted' || this.state.biome === 'firefly') {
+      ctx.save();
+      for (let i = 0; i < 18; i++) {
+        const sx = ((i * 137.5 + this.state.gameTime * 0.15) % (w + 40)) - 20;
+        const sy = 30 + ((i * 73.1) % (h * 0.55));
+        const sparkAlpha = 0.25 + Math.sin(this.state.gameTime * 0.04 + i * 1.7) * 0.25;
+        const sparkSize = 1.2 + Math.sin(this.state.gameTime * 0.06 + i * 2.3) * 0.8;
+        ctx.globalAlpha = sparkAlpha;
+        ctx.fillStyle = i % 3 === 0 ? '#FFF9C4' : i % 3 === 1 ? '#B2FF59' : '#80DEEA';
+        ctx.beginPath();
+        ctx.arc(sx, sy, sparkSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   blendColors(color1: string, color2: string, progress: number): string {
@@ -2378,49 +2443,88 @@ export class GameEngine {
 
   drawMountain(ctx: CanvasRenderingContext2D, x: number, baseY: number, scale: number, color: string) {
     const h = scale * 150;
-    ctx.fillStyle = color + '80';
+    // Mountain body with gradient
+    const mtGrad = ctx.createLinearGradient(x, baseY + 100 - h, x, baseY + 100);
+    mtGrad.addColorStop(0, color + 'A0');
+    mtGrad.addColorStop(0.6, color + '70');
+    mtGrad.addColorStop(1, color + '40');
+    ctx.fillStyle = mtGrad;
     ctx.beginPath();
     ctx.moveTo(x - h * 0.8, baseY + 100);
     ctx.lineTo(x, baseY + 100 - h);
     ctx.lineTo(x + h * 0.8, baseY + 100);
     ctx.fill();
+    // Shaded side
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.beginPath();
+    ctx.moveTo(x, baseY + 100 - h);
+    ctx.lineTo(x + h * 0.8, baseY + 100);
+    ctx.lineTo(x, baseY + 100);
+    ctx.fill();
     // Snow cap
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.beginPath();
     ctx.moveTo(x - h * 0.15, baseY + 100 - h * 0.8);
     ctx.lineTo(x, baseY + 100 - h);
     ctx.lineTo(x + h * 0.15, baseY + 100 - h * 0.8);
     ctx.fill();
+    // Snow edge detail
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.moveTo(x - h * 0.2, baseY + 100 - h * 0.75);
+    ctx.lineTo(x - h * 0.05, baseY + 100 - h * 0.82);
+    ctx.lineTo(x + h * 0.1, baseY + 100 - h * 0.78);
+    ctx.lineTo(x + h * 0.2, baseY + 100 - h * 0.72);
+    ctx.fill();
   }
 
   drawTree(ctx: CanvasRenderingContext2D, x: number, baseY: number, scale: number, color: string, variant: number) {
     const h = scale * 60;
-    // Trunk
-    ctx.fillStyle = '#5D4037';
+    // Trunk with gradient
+    const trunkGrad = ctx.createLinearGradient(x - 4 * scale, baseY - h * 0.3, x + 4 * scale, baseY + h * 0.1);
+    trunkGrad.addColorStop(0, '#6D4C41');
+    trunkGrad.addColorStop(1, '#4E342E');
+    ctx.fillStyle = trunkGrad;
     ctx.fillRect(x - 4 * scale, baseY - h * 0.3, 8 * scale, h * 0.4);
     // Foliage
-    ctx.fillStyle = color;
     if (variant % 2 === 0) {
-      // Round tree
+      // Round tree with layered canopy
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, baseY - h * 0.5, h * 0.35, 0, Math.PI * 2);
+      ctx.arc(x, baseY - h * 0.5, h * 0.38, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = color + 'CC';
+      ctx.fillStyle = color + 'DD';
       ctx.beginPath();
-      ctx.arc(x + h * 0.15, baseY - h * 0.6, h * 0.25, 0, Math.PI * 2);
+      ctx.arc(x + h * 0.15, baseY - h * 0.62, h * 0.27, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x - h * 0.12, baseY - h * 0.58, h * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      // Light highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.beginPath();
+      ctx.arc(x - h * 0.08, baseY - h * 0.62, h * 0.15, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Triangle tree
+      // Triangle tree with layered tiers
+      ctx.fillStyle = color;
       ctx.beginPath();
       ctx.moveTo(x, baseY - h);
-      ctx.lineTo(x - h * 0.3, baseY - h * 0.2);
-      ctx.lineTo(x + h * 0.3, baseY - h * 0.2);
+      ctx.lineTo(x - h * 0.32, baseY - h * 0.2);
+      ctx.lineTo(x + h * 0.32, baseY - h * 0.2);
       ctx.fill();
       ctx.fillStyle = color + 'CC';
       ctx.beginPath();
-      ctx.moveTo(x, baseY - h * 0.85);
-      ctx.lineTo(x - h * 0.25, baseY - h * 0.35);
-      ctx.lineTo(x + h * 0.25, baseY - h * 0.35);
+      ctx.moveTo(x, baseY - h * 0.88);
+      ctx.lineTo(x - h * 0.27, baseY - h * 0.35);
+      ctx.lineTo(x + h * 0.27, baseY - h * 0.35);
+      ctx.fill();
+      // Snow/light on tip
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.beginPath();
+      ctx.moveTo(x, baseY - h);
+      ctx.lineTo(x - h * 0.08, baseY - h * 0.85);
+      ctx.lineTo(x + h * 0.08, baseY - h * 0.85);
       ctx.fill();
     }
   }
@@ -2520,6 +2624,32 @@ export class GameEngine {
           ctx.ellipse(gx, p.y + 19, 4, 2.5, 0.4, 0, Math.PI * 2);
           ctx.fill();
         }
+
+        // Small decorative flowers on ground surface
+        for (let gx = p.x + 25; gx < p.x + p.width - 25; gx += 65 + ((Math.floor(gx) * 13) % 30)) {
+          const flowerColors = ['#FF69B4', '#FFD700', '#FF6347', '#DDA0DD', '#87CEEB'];
+          const fc = flowerColors[Math.floor(Math.abs(Math.sin(gx * 0.3)) * flowerColors.length)];
+          // Stem
+          ctx.strokeStyle = '#4CAF50';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(gx, p.y);
+          ctx.lineTo(gx, p.y - 8);
+          ctx.stroke();
+          // Petals
+          ctx.fillStyle = fc;
+          for (let pi = 0; pi < 4; pi++) {
+            const pa = (pi / 4) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(gx + Math.cos(pa) * 3, p.y - 8 + Math.sin(pa) * 3, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Center
+          ctx.fillStyle = '#FFF176';
+          ctx.beginPath();
+          ctx.arc(gx, p.y - 8, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (p.type === 'mushroom') {
         const cx = p.x + p.width / 2;
         const capW = p.width / 2;
@@ -2617,12 +2747,43 @@ export class GameEngine {
           ctx.fill();
         }
       } else if (p.type === 'floating') {
-        ctx.fillStyle = p.color;
+        // Soft glow beneath the platform
+        ctx.save();
+        ctx.globalAlpha = 0.18 + Math.sin(this.state.gameTime * 0.04) * 0.06;
+        ctx.fillStyle = '#A5D6A7';
+        ctx.beginPath();
+        ctx.ellipse(p.x + p.width / 2, p.y + p.height + 6, p.width * 0.45, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Platform body with gradient
+        const floatGrad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.height);
+        floatGrad.addColorStop(0, '#81C784');
+        floatGrad.addColorStop(0.5, p.color);
+        floatGrad.addColorStop(1, '#2E7D32');
+        ctx.fillStyle = floatGrad;
         ctx.beginPath();
         ctx.roundRect(p.x, p.y, p.width, p.height, 6);
         ctx.fill();
-        ctx.fillStyle = '#6ABF4B';
-        ctx.fillRect(p.x + 2, p.y - 2, p.width - 4, 4);
+
+        // Bright grass top
+        ctx.fillStyle = '#A5D6A7';
+        ctx.fillRect(p.x + 2, p.y, p.width - 4, 3);
+
+        // Tiny grass tufts
+        ctx.fillStyle = '#66BB6A';
+        for (let gx = p.x + 5; gx < p.x + p.width - 5; gx += 12) {
+          const gh = 3 + Math.sin(gx * 0.8) * 2;
+          ctx.beginPath();
+          ctx.moveTo(gx, p.y);
+          ctx.lineTo(gx + 2, p.y - gh);
+          ctx.lineTo(gx + 4, p.y);
+          ctx.fill();
+        }
+
+        // Highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        ctx.fillRect(p.x + 4, p.y + 2, p.width * 0.4, 3);
       } else if (p.type === 'vine') {
         ctx.strokeStyle = '#4CAF50';
         ctx.lineWidth = 6;
@@ -2817,20 +2978,46 @@ export class GameEngine {
           ctx.lineTo(c.x + 20, y + 10);
           ctx.stroke();
           break;
-        case 'leafToken':
-          ctx.fillStyle = '#FFD700';
+        case 'leafToken': {
+          const coinSpin = Math.cos(this.state.gameTime * 0.06 + c.bobOffset);
+          const coinScaleX = 0.5 + Math.abs(coinSpin) * 0.5;
+          ctx.save();
+          ctx.translate(c.x + 12, y + 12);
+          ctx.scale(coinScaleX, 1);
+          // Outer ring glow
+          const coinGlow = ctx.createRadialGradient(0, 0, 5, 0, 0, 14);
+          coinGlow.addColorStop(0, 'rgba(255,215,0,0.45)');
+          coinGlow.addColorStop(1, 'rgba(255,215,0,0)');
+          ctx.fillStyle = coinGlow;
           ctx.beginPath();
-          ctx.arc(c.x + 12, y + 12, 10, 0, Math.PI * 2);
+          ctx.arc(0, 0, 14, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#FFA000';
+          // Coin body
+          const coinGrad = ctx.createRadialGradient(-3, -3, 1, 0, 0, 10);
+          coinGrad.addColorStop(0, '#FFF176');
+          coinGrad.addColorStop(0.5, '#FFD700');
+          coinGrad.addColorStop(1, '#F9A825');
+          ctx.fillStyle = coinGrad;
           ctx.beginPath();
-          ctx.arc(c.x + 12, y + 12, 7, 0, Math.PI * 2);
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#FFD700';
-          ctx.font = 'bold 12px Arial';
-          ctx.textAlign = 'center';
-          ctx.fillText('L', c.x + 12, y + 16);
+          // Inner ring
+          ctx.strokeStyle = 'rgba(245,180,0,0.6)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.stroke();
+          // Leaf symbol
+          if (Math.abs(coinSpin) > 0.3) {
+            ctx.fillStyle = '#E65100';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🍃', 0, 1);
+          }
+          ctx.restore();
           break;
+        }
         case 'mushroom_powerup':
           ctx.fillStyle = '#FFF';
           ctx.fillRect(c.x + 8, y + 14, 8, 10);
@@ -3246,20 +3433,24 @@ export class GameEngine {
 export const levels = [
   {
     platforms: [
-      { x: 0, y: GROUND_Y, width: 200 },
-      { x: 220, y: GROUND_Y - 40, width: 120 },
-      { x: 370, y: GROUND_Y - 20, width: 180 },
-      { x: 600, y: GROUND_Y - 60, width: 140 },
+      { x: 0, y: GROUND_Y, width: 350 },
+      { x: 360, y: GROUND_Y, width: 280 },
+      { x: 660, y: GROUND_Y, width: 300 },
+      { x: 330, y: GROUND_Y - 80, width: 100 },
+      { x: 550, y: GROUND_Y - 120, width: 90 },
     ],
-    enemies: [
-      { x: 250, y: GROUND_Y - 40, type: 'slime' },
-    ],
+    enemies: [],
     coins: [
-      { x: 230, y: GROUND_Y - 60 },
-      { x: 400, y: GROUND_Y - 80 },
+      { x: 150, y: GROUND_Y - 40 },
+      { x: 250, y: GROUND_Y - 40 },
+      { x: 370, y: GROUND_Y - 100 },
+      { x: 500, y: GROUND_Y - 40 },
+      { x: 600, y: GROUND_Y - 140 },
+      { x: 750, y: GROUND_Y - 40 },
     ],
     powerUps: [
-      { x: 400, y: GROUND_Y - 20, type: 'shield' },
+      { x: 450, y: GROUND_Y - 40, type: 'shield' },
+      { x: 800, y: GROUND_Y - 40, type: 'mushroom_powerup' },
     ],
   },
   {
