@@ -38,7 +38,7 @@ export default function GameCanvas() {
       engine.current.resume();
       setScreenRef.current?.('playing');
     }
-  }, []);
+  }, [engine]);
   const saveProgressRef = useRef(saveProgress);
   const showCheckpointToastRef = useRef(showCheckpointToast);
   const clearSavedProgressRef = useRef(clearSavedProgress);
@@ -225,45 +225,45 @@ export default function GameCanvas() {
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     engine.current?.jumpPress();
-  }, []);
+  }, [engine]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     engine.current?.releaseJump();
-  }, []);
+  }, [engine]);
 
   const handleMouseDown = useCallback(() => {
     engine.current?.jumpPress();
-  }, []);
+  }, [engine]);
 
   const handleMouseUp = useCallback(() => {
     engine.current?.releaseJump();
-  }, []);
+  }, [engine]);
 
   const handleMoveLeft = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('reverse');
-  }, []);
+  }, [engine]);
 
   const handleMoveRight = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('walk');
-  }, []);
+  }, [engine]);
 
   const handleStopMoving = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('idle');
-  }, []);
+  }, [engine]);
 
   const handleTouchJump = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.jumpPress();
-  }, []);
+  }, [engine]);
 
   const handleTouchRelease = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.releaseJump();
-  }, []);
+  }, [engine]);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
