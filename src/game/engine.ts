@@ -1,6 +1,6 @@
 import {
   Platform, Collectible, Obstacle, Hazard, Particle, BackgroundElement,
-  PlayerState, GameState, Resources, BiomeType, PowerUpType, MovementMode,
+  PlayerState, GameState, Resources, BiomeType, BiomeConfig, PowerUpType, MovementMode,
   GRAVITY, JUMP_FORCE, DOUBLE_JUMP_FORCE, GLIDE_GRAVITY,
   BASE_SCROLL_SPEED, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT,
   CHECKPOINT_INTERVAL, POWERUP_DURATION, BIOME_COLORS, CHARACTER_COLORS,
@@ -159,7 +159,7 @@ export class GameEngine {
           this.cameraShake = 10;
           break;
           
-        case 'rainbow':
+        case 'rainbow': {
           // Level 4+: Rainbow cascade
           const rainbowColors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
           for (let i = 0; i < 80; i++) {
@@ -179,6 +179,7 @@ export class GameEngine {
           }
           this.cameraShake = 12;
           break;
+        }
       }
     }
     // ...existing code...
@@ -627,7 +628,7 @@ export class GameEngine {
   }
 }
 
-  addFloatingPlatform(x: number, biome: Record<string, any>) {
+  addFloatingPlatform(x: number, biome: BiomeConfig) {
     // Increase mushroom spawn rate and add more variety
     const rand = this.random();
     let type;
@@ -655,7 +656,7 @@ export class GameEngine {
     this.nextPlatformX = x + w + 30 + this.random() * 30;
   }
 
-  addCollectible(x: number, biome: Record<string, any>) {
+  addCollectible(x: number, biome: BiomeConfig) {
     // Apply difficulty-based power-up frequency
     const powerUpChance = 0.15 * this.difficultyConfig.powerUpFrequency;
     const rand = this.random();

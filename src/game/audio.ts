@@ -164,7 +164,7 @@ export function stopMusic() {
     clearInterval(musicInterval);
     musicInterval = null;
   }
-  musicOscillators.forEach(o => { try { o.stop(); } catch(e) {} });
+  musicOscillators.forEach(o => { try { o.stop(); } catch(e) { /* ignore stop errors */ } });
   musicOscillators = [];
 }
 

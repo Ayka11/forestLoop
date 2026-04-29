@@ -93,7 +93,7 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [isVisible]);
+  }, [isVisible, handleDismiss])
 
   if (!isVisible) return null;
 

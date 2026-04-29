@@ -33,6 +33,7 @@ export default function GameCanvas() {
   });
 
   // Resume game function for level-up notifications
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleResumeGame = useCallback(() => {
     if (engine.current?.state.isPaused) {
       engine.current.resume();
@@ -222,44 +223,53 @@ export default function GameCanvas() {
     };
   }, [engine]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     engine.current?.jumpPress();
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     engine.current?.releaseJump();
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleMouseDown = useCallback(() => {
     engine.current?.jumpPress();
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleMouseUp = useCallback(() => {
     engine.current?.releaseJump();
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleMoveLeft = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('reverse');
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleMoveRight = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('walk');
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleStopMoving = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.setMovementMode('idle');
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleTouchJump = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.jumpPress();
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const handleTouchRelease = useCallback((e?: React.TouchEvent) => {
     e?.preventDefault();
     engine.current?.releaseJump();
