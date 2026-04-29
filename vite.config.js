@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    base: env.VITE_BASE_PATH || (isAzure ? '/app/' : '/'),
+    base: '/',
     build: {
       chunkSizeWarningLimit: isAzure ? 250 : 300,
       rollupOptions: {
