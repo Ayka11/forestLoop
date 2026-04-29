@@ -43,6 +43,12 @@ jobs:
           zip -r -q ../deploy.zip .
           cd ..
       
+
+      - name: Clean wwwroot before deploy
+        if: success()
+        run: |
+          curl -X DELETE -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/?recursive=true"
+
       - name: Deploy to Azure
         if: success()
         run: |
@@ -51,6 +57,13 @@ jobs:
             -H "Content-Type: application/zip" \
             --data-binary @deploy.zip \
             "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy"
+
+      - name: List deployed files
+        if: success()
+        run: |
+          echo "Listing deployed files in wwwroot..."
+          curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200 || echo "No index.html at root"
+          curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/dist/index.html | head -c 200 || echo "No dist/index.html"
 
       - name: Verify deployment (index.html check)
         if: success()
