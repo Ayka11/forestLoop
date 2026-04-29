@@ -67,6 +67,9 @@ jobs:
           echo "Listing actual directory contents in wwwroot via Kudu API..."
           curl -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
             "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/" | jq '.[] | {name, type}' || echo "Failed to list directory"
+          echo "Checking for web.config..."
+          curl -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/web.config" | head -c 200 || echo "No web.config found"
           echo "Attempting to access index.html at root..."
           curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200 || echo "No index.html at root"
       
