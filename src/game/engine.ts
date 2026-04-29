@@ -402,8 +402,8 @@ export class GameEngine {
     // Layer 1: Mid trees + fireflies for enchanted biome
     const midTrees: BackgroundElement[] = [];
     for (let i = 0; i < 35; i++) {
-      let type = 'tree';
-      let color = biome.trees[Math.floor(this.random() * biome.trees.length)];
+      const type = 'tree';
+      const color = biome.trees[Math.floor(this.random() * biome.trees.length)];
       
       // Add fireflies for enchanted biome
       if (this.state.biome === 'firefly' && this.random() < 0.2) {
@@ -608,7 +608,6 @@ export class GameEngine {
   let currentX = 400;
   while (currentX < viewportWidth * 2) {
     const platformWidth = 280 + this.random() * 120;
-    
     this.platforms.push({
       x: currentX,
       y: GROUND_Y,
@@ -617,7 +616,6 @@ export class GameEngine {
       type: 'ground',
       color: biome.ground,
     });
-    
     currentX += platformWidth;
   }
   
@@ -686,7 +684,7 @@ export class GameEngine {
   addObstacle(x: number) {
     // Enhanced difficulty scaling based on level and distance
     const levelMultiplier = Math.min(1, this.currentLevel);
-    let allowedTypes: Obstacle['type'][] = ['slime'];
+    const allowedTypes: Obstacle['type'][] = ['slime'];
     
     // Progressive enemy unlocking based on distance and level
     if (this.state.distance > 800 || this.currentLevel >= 2) allowedTypes.push('bird');
@@ -700,6 +698,7 @@ export class GameEngine {
     
     // Enhanced positioning and behavior based on enemy type
     let y, width, height, speed, patrolPattern: Obstacle['patrolPattern'], alertState: Obstacle['alertState'] = 'idle';
+      let y, width, height, speed, patrolPattern: Obstacle['patrolPattern'], alertState: Obstacle['alertState'] = 'idle';
     
     switch (type) {
       case 'bird':
@@ -766,6 +765,7 @@ export class GameEngine {
   const levelMultiplier = 1 + (this.state.currentLevel - 1) * 0.1;  
   // Variable jump based on how long button was held
   let jumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE));
+    let jumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE));
   jumpPower = Math.min(MAX_JUMP_FORCE, Math.max(MIN_JUMP_FORCE, jumpPower));
   jumpPower *= levelMultiplier;
   
@@ -1138,7 +1138,6 @@ export class GameEngine {
     for (let t = 0; t <= 1; t += 0.05) {
       const x = startX + vx * t * 10;
       const y = startY + vy * t * 10 + 0.5 * GRAVITY * (t * 10) * (t * 10);
-      
       if (y < this.height) {
         this.trajectoryPoints.push({ x, y });
       }
@@ -1366,6 +1365,7 @@ export class GameEngine {
       p.vx = 0;
     } else {
       let targetVx = targetSpeeds[this.movementMode];
+        let targetVx = targetSpeeds[this.movementMode];
       // Apply speed boost to player movement
       if (p.speedBoost) {
         targetVx *= 1.5;
@@ -2012,6 +2012,7 @@ export class GameEngine {
       
       // Active hazard rendering
       let fillColor, strokeColor, highlightColor;
+        let fillColor, strokeColor, highlightColor;
       
       switch (hazard.type) {
         case 'water':
@@ -2218,6 +2219,7 @@ export class GameEngine {
 
   renderSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
     let colors = BIOME_COLORS[this.state.biome].sky;
+      let colors = BIOME_COLORS[this.state.biome].sky;
     
     if (this.state.isTransitioning && this.state.transitioningBiome) {
       const targetColors = BIOME_COLORS[this.state.transitioningBiome].sky;

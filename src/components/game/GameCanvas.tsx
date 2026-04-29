@@ -22,10 +22,14 @@ export default function GameCanvas() {
   });
 
   // Level completion reward state
-  const [levelCompletion, setLevelCompletion] = useState({
+  const [levelCompletion, setLevelCompletion] = useState<{
+    visible: boolean;
+    level: number;
+    bonusData: import('./LevelCompletionReward').BonusData | undefined;
+  }>({
     visible: false,
     level: 1,
-    bonusData: undefined as any,
+    bonusData: undefined,
   });
 
   // Resume game function for level-up notifications
@@ -170,9 +174,7 @@ export default function GameCanvas() {
         if (newName && newName.trim()) {
           localStorage.setItem('flo_playerName', newName.trim());
         }
-      } else if (e.code === 'KeyS' && e.ctrlKey) {
-        e.preventDefault();
-        setScreenRef.current?.('shop');
+      // Removed duplicate else-if for 'KeyS' with ctrlKey to fix no-dupe-else-if error
       } else if (e.code === 'KeyE' && e.ctrlKey) {
         e.preventDefault();
         setScreenRef.current?.('avatar');
