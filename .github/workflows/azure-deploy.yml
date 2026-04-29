@@ -53,25 +53,41 @@ jobs:
         if: success()
         run: |
           echo "Starting deployment..."
-          curl -X POST \
+          DEPLOY_RESPONSE=$(curl -X POST \
             -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
             -H "Content-Type: application/zip" \
             --data-binary @deploy.zip \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy"
-          echo "Deployment API call completed. Waiting 5 seconds for files to be written..."
-          sleep 5
+            -w "\n%{http_code}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy")
+          echo "Deployment Response:"
+          echo "$DEPLOY_RESPONSE"
+          HTTP_CODE=$(echo "$DEPLOY_RESPONSE" | tail -n 1)
+          echo "HTTP Status Code: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "202" ]; then
+            echo "Deployment failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Deployment API call completed. Waiting 10 seconds for files to be written..."
+          sleep 10
 
       - name: List deployed files via Kudu
         if: success()
         run: |
+          echo "=== Deployment Diagnostics ==="
           echo "Listing actual directory contents in wwwroot via Kudu API..."
-          curl -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/" | jq '.[] | {name, type}' || echo "Failed to list directory"
-          echo "Checking for web.config..."
-          curl -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
-            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/web.config" | head -c 200 || echo "No web.config found"
-          echo "Attempting to access index.html at root..."
-          curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200 || echo "No index.html at root"
+          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/"
+          echo ""
+          echo "Checking for index.html via Kudu..."
+          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/index.html" | head -c 500
+          echo ""
+          echo "Checking for web.config via Kudu..."
+          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/web.config" | head -c 500
+          echo ""
+          echo "Attempting to access index.html via HTTPS..."
+          curl -v https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 500
       
       - name: Deployment summary
         if: always()
