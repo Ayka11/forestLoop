@@ -44,6 +44,14 @@ jobs:
           cd ..
       
 
+      - name: Test credentials
+        if: success()
+        run: |
+          echo "Testing Kudu API authentication..."
+          curl -v -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/" 2>&1 | grep -E "(HTTP|401|200|credentials|authentication)" || true
+          echo "Credentials test complete"
+
       - name: Clean wwwroot before deploy
         if: success()
         run: |
