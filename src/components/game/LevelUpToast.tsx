@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { X, Star, Sparkles, Trophy, Crown } from 'lucide-react';
 
 interface LevelUpToastProps {
@@ -55,14 +55,14 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
 
   const config = levelConfig[level as keyof typeof levelConfig] || levelConfig[2];
 
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     setIsAnimating(false);
     setTimeout(() => {
       setIsVisible(false);
       onComplete?.();
       onResumeGame?.(); // Resume game when dismissed
     }, 300);
-  };
+  }, [onComplete, onResumeGame]);
 
   useEffect(() => {
     if (visible) {
@@ -76,7 +76,7 @@ export default function LevelUpToast({ visible, level, message, color, onComplet
       
       return () => clearTimeout(timer);
     }
-  }, [visible, onComplete, onResumeGame]);
+  }, [visible, onComplete, onResumeGame, handleDismiss]);
 
   // Add keyboard event listener for ESC key
   useEffect(() => {
