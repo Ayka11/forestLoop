@@ -52,11 +52,14 @@ jobs:
       - name: Deploy to Azure
         if: success()
         run: |
+          echo "Starting deployment..."
           curl -X POST \
             -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
             -H "Content-Type: application/zip" \
             --data-binary @deploy.zip \
             "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy"
+          echo "Deployment API call completed. Waiting 5 seconds for files to be written..."
+          sleep 5
 
       - name: List deployed files via Kudu
         if: success()
