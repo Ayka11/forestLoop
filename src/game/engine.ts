@@ -699,7 +699,6 @@ export class GameEngine {
     
     // Enhanced positioning and behavior based on enemy type
     let y, width, height, speed, patrolPattern: Obstacle['patrolPattern'], alertState: Obstacle['alertState'] = 'idle';
-      let y, width, height, speed, patrolPattern: Obstacle['patrolPattern'], alertState: Obstacle['alertState'] = 'idle';
     
     switch (type) {
       case 'bird':
@@ -766,7 +765,6 @@ export class GameEngine {
   const levelMultiplier = 1 + (this.state.currentLevel - 1) * 0.1;  
   // Variable jump based on how long button was held
   let jumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE));
-    let jumpPower = MIN_JUMP_FORCE + (this.jumpCharge * (MAX_JUMP_FORCE - MIN_JUMP_FORCE));
   jumpPower = Math.min(MAX_JUMP_FORCE, Math.max(MIN_JUMP_FORCE, jumpPower));
   jumpPower *= levelMultiplier;
   
@@ -1366,7 +1364,6 @@ export class GameEngine {
       p.vx = 0;
     } else {
       let targetVx = targetSpeeds[this.movementMode];
-        let targetVx = targetSpeeds[this.movementMode];
       // Apply speed boost to player movement
       if (p.speedBoost) {
         targetVx *= 1.5;
@@ -2013,7 +2010,6 @@ export class GameEngine {
       
       // Active hazard rendering
       let fillColor, strokeColor, highlightColor;
-        let fillColor, strokeColor, highlightColor;
       
       switch (hazard.type) {
         case 'water':
@@ -2220,7 +2216,6 @@ export class GameEngine {
 
   renderSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
     let colors = BIOME_COLORS[this.state.biome].sky;
-      let colors = BIOME_COLORS[this.state.biome].sky;
     
     if (this.state.isTransitioning && this.state.transitioningBiome) {
       const targetColors = BIOME_COLORS[this.state.transitioningBiome].sky;
