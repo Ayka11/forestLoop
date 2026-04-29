@@ -58,18 +58,14 @@ jobs:
             --data-binary @deploy.zip \
             "${{ secrets.AZURE_PUBLISH_URL }}/api/zipdeploy"
 
-      - name: List deployed files
+      - name: List deployed files via Kudu
         if: success()
         run: |
-          echo "Listing deployed files in wwwroot..."
+          echo "Listing actual directory contents in wwwroot via Kudu API..."
+          curl -u "${{ secrets.AZURE_PUBLISH_USERNAME }}:${{ secrets.AZURE_PUBLISH_PASSWORD }}" \
+            "${{ secrets.AZURE_PUBLISH_URL }}/api/vfs/site/wwwroot/" | jq '.[] | {name, type}' || echo "Failed to list directory"
+          echo "Attempting to access index.html at root..."
           curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200 || echo "No index.html at root"
-          curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/dist/index.html | head -c 200 || echo "No dist/index.html"
-
-      - name: Verify deployment (index.html check)
-        if: success()
-        run: |
-          echo "Checking if index.html exists in Azure App Service..."
-          curl -sSf https://${{ env.AZURE_SITE_NAME }}.azurewebsites.net/index.html | head -c 200
       
       - name: Deployment summary
         if: always()
