@@ -91,8 +91,12 @@ export default function GameOverScreen() {
 
       setGlobalRank((count ?? 0) + 1);
       setSubmitted(true);
-    } catch (err: any) {
-      console.error('Score submit error:', err);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Score submit error:', err.message);
+      } else {
+        console.error('Score submit error:', err);
+      }
       setSubmitError('Failed to submit. Please try again.');
     } finally {
       setSubmitting(false);

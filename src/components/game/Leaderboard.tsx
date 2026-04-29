@@ -60,8 +60,12 @@ export default function Leaderboard() {
       const { data, error: fetchError } = await query;
       if (fetchError) throw fetchError;
       setScores(data || []);
-    } catch (err: any) {
-      console.error('Leaderboard fetch error:', err);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Leaderboard fetch error:', err.message);
+      } else {
+        console.error('Leaderboard fetch error:', err);
+      }
       setError('Could not load scores. Please try again.');
     } finally {
       setLoading(false);

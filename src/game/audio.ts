@@ -8,7 +8,7 @@ let musicOscillators: OscillatorNode[] = [];
 
 function getCtx(): AudioContext {
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    audioCtx = new (window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
     masterGain = audioCtx.createGain();
     masterGain.gain.value = 0.3;
     masterGain.connect(audioCtx.destination);

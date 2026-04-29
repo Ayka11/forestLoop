@@ -627,7 +627,7 @@ export class GameEngine {
   }
 }
 
-  addFloatingPlatform(x: number, biome: any) {
+  addFloatingPlatform(x: number, biome: Record<string, any>) {
     // Increase mushroom spawn rate and add more variety
     const rand = this.random();
     let type;
@@ -655,7 +655,7 @@ export class GameEngine {
     this.nextPlatformX = x + w + 30 + this.random() * 30;
   }
 
-  addCollectible(x: number, biome: any) {
+  addCollectible(x: number, biome: Record<string, any>) {
     // Apply difficulty-based power-up frequency
     const powerUpChance = 0.15 * this.difficultyConfig.powerUpFrequency;
     const rand = this.random();
@@ -1425,9 +1425,9 @@ export class GameEngine {
           p.gliding = false;
           
           // Cloud platform effect - slowly dissolves after standing on it
-          if (plat.type === 'cloud' && !(plat as any).isDissolving) {
-            (plat as any).isDissolving = true;
-            (plat as any).dissolveTimer = 300;
+          if (plat.type === 'cloud' && typeof (plat as { isDissolving?: boolean }).isDissolving === 'undefined') {
+            (plat as { isDissolving?: boolean }).isDissolving = true;
+            (plat as { dissolveTimer?: number }).dissolveTimer = 300;
             this.spawnParticles(p.x + p.width / 2, p.y + p.height, 10, '#AADDFF', 'sparkle');
           }
           
@@ -1454,9 +1454,9 @@ export class GameEngine {
 
     // Update cloud platform dissolving
     for (const plat of this.platforms) {
-      if (plat.type === 'cloud' && (plat as any).dissolveTimer > 0) {
-        (plat as any).dissolveTimer -= dt;
-        if ((plat as any).dissolveTimer <= 0) {
+      if (plat.type === 'cloud' && (plat as { dissolveTimer?: number }).dissolveTimer && (plat as { dissolveTimer?: number }).dissolveTimer! > 0) {
+        (plat as { dissolveTimer?: number }).dissolveTimer! -= dt;
+        if ((plat as { dissolveTimer?: number }).dissolveTimer! <= 0) {
           // Remove dissolved cloud
           const index = this.platforms.indexOf(plat);
           if (index > -1) this.platforms.splice(index, 1);
@@ -2850,9 +2850,9 @@ export class GameEngine {
         }
       } else if (p.type === 'cloud') {
         // Playable cloud platform — fluffy bumps, flat tinted base, sparkle glints
-        const floatOffset = (p as any).floatOffset || 0;
-        const floatY = p.y + Math.sin(this.state.gameTime * ((p as any).floatSpeed || 0.8) + floatOffset) * 4;
-        const dissolve = (p as any).dissolveTimer || 0;
+        const floatOffset = (p as { floatOffset?: number }).floatOffset || 0;
+        const floatY = p.y + Math.sin(this.state.gameTime * ((p as { floatSpeed?: number }).floatSpeed || 0.8) + floatOffset) * 4;
+        const dissolve = (p as { dissolveTimer?: number }).dissolveTimer || 0;
         // Opacity: stays solid until last 60 frames, then fades out
         const opacity = dissolve > 0 ? Math.min(1, dissolve / 60) : 1;
 
