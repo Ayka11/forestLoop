@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --mode development",
     "build": "vite build",
-    "build:azure": "vite build --mode production",
+    "build:azure": "vite build --mode production && node scripts/prepare-azure-dist.mjs",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview --mode development",
