@@ -313,8 +313,8 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
     showJumpTrajectory: true,
     showEnemyWarnings: true,
     tutorialEnabled: true,
-    safeZoneDistance: 150,
-    hazardStartDistance: 200,
+    safeZoneDistance: 2000,
+    hazardStartDistance: 1500,
   },
   normal: {
     name: 'Normal',

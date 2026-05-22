@@ -58,37 +58,30 @@ export class GameEngine {
         this.state.maxDistance = this.state.totalDistance;
       }
 
-      // Level progression based on distance milestones
+      // Level progression based on distance milestones - Synced with Biome Transitions
       const previousLevel = this.state.currentLevel;
+
+      // Biome intervals are 5000, 10000, 15000
       if (this.state.totalDistance >= 5000 && previousLevel === 1) {
         this.state.currentLevel = 2;
-        // Auto-pause game for level-up notification
-        if (this.state.isPlaying && !this.state.isPaused) {
-          this.pause();
-        }
+        if (this.state.isPlaying && !this.state.isPaused) this.pause();
         this.onLevelUp?.(2);
-        // Level 1→2: Green upward burst + "LEVEL UP!"
-        this.spawnLevelUpEffect(2, '#00FF00', 'upward');
+        // Level 1→2: Crystal Cave transition
+        this.spawnLevelUpEffect(2, '#00E5FF', 'upward');
         this.cameraShake = 5;
-      } else if (this.state.totalDistance >= 13000 && previousLevel === 2) {
+      } else if (this.state.totalDistance >= 10000 && previousLevel === 2) {
         this.state.currentLevel = 3;
-        // Auto-pause game for level-up notification
-        if (this.state.isPlaying && !this.state.isPaused) {
-          this.pause();
-        }
+        if (this.state.isPlaying && !this.state.isPaused) this.pause();
         this.onLevelUp?.(3);
-        // Level 2→3: Blue swirls + horizontal sweep + "ADVANCED!"
-        this.spawnLevelUpEffect(3, '#00BFFF', 'horizontal');
+        // Level 2→3: Autumn Forest transition
+        this.spawnLevelUpEffect(3, '#FF6F00', 'horizontal');
         this.cameraShake = 6;
-      } else if (this.state.totalDistance >= 36000 && previousLevel === 3) {
+      } else if (this.state.totalDistance >= 15000 && previousLevel === 3) {
         this.state.currentLevel = 4;
-        // Auto-pause game for level-up notification
-        if (this.state.isPlaying && !this.state.isPaused) {
-          this.pause();
-        }
+        if (this.state.isPlaying && !this.state.isPaused) this.pause();
         this.onLevelUp?.(4);
-        // Level 3→4: Purple explosion + screen flash + "MASTER!"
-        this.spawnLevelUpEffect(4, '#FF00FF', 'explosion');
+        // Level 3→4: Firefly Night transition
+        this.spawnLevelUpEffect(4, '#FFEB3B', 'explosion');
         this.cameraShake = 7;
       }
       
@@ -377,15 +370,15 @@ export class GameEngine {
     const biome = BIOME_COLORS[this.state.biome];
     
     // Initialize layers in correct order: back to front
-    // Layer 0: Near bushes + flowers + mushrooms (frontmost)
+    // Layer 0: Near bushes + flowers + mushrooms (frontmost) - Layered and spaced
     const near: BackgroundElement[] = [];
-    for (let i = 0; i < 50; i++) { // More elements for visual variety
+    for (let i = 0; i < 60; i++) {
       const rand = this.random();
-      let type, color;
-      if (rand < 0.35) {
+      let type: BackgroundElement['type'], color;
+      if (rand < 0.4) {
         type = 'bush';
-        color = biome.trees[2];
-      } else if (rand < 0.7) {
+        color = biome.trees[Math.floor(this.random() * biome.trees.length)];
+      } else if (rand < 0.8) {
         type = 'flower';
         color = biome.flowers[Math.floor(this.random() * biome.flowers.length)];
       } else {
@@ -393,8 +386,8 @@ export class GameEngine {
         color = '#FF6B6B';
       }
       near.push({
-        x: i * 70 + this.random() * 35, y: 0,
-        type, scale: 0.3 + this.random() * 0.4,
+        x: i * 80 + this.random() * 40, y: 0,
+        type, scale: 0.4 + this.random() * 0.3,
         color, variant: Math.floor(this.random() * 4),
       });
     }
@@ -423,21 +416,21 @@ export class GameEngine {
     }
     this.bgLayers.push({ offset: 0, speed: 0.25, elements: midTrees });
 
-    // Layer 2: Mountains + distant trees
+    // Layer 2: Mountains + distant trees - Massive scale and depth
     const mountains: BackgroundElement[] = [];
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 30; i++) {
       const rand = this.random();
-      let type, color;
-      if (rand < 0.7) {
+      let type: BackgroundElement['type'], color;
+      if (rand < 0.85) {
         type = 'mountain';
-        color = biome.trees[0];
+        color = this.darkenColor(biome.ground, 60);
       } else {
         type = 'tree';
-        color = biome.trees[Math.floor(this.random() * biome.trees.length)];
+        color = this.darkenColor(biome.trees[0], 40);
       }
       mountains.push({
-        x: i * 180 + this.random() * 90, y: 0,
-        type, scale: 0.8 + this.random() * 0.6,
+        x: i * 250 + this.random() * 120, y: 0,
+        type, scale: 1.2 + this.random() * 0.8,
         color, variant: Math.floor(this.random() * 3),
       });
     }
@@ -1036,17 +1029,28 @@ export class GameEngine {
     this.generateTerrain();
     this.updateHazards(this.player.vx * dt);
 
-    // Ambient particles
-    if (this.frameCount % 10 === 0) {
+    // Ambient particles - smoother and biome-aware
+    if (this.frameCount % 8 === 0) {
       const biome = this.state.biome;
-      if (biome === 'firefly') {
-        this.particles.push({
-          x: this.random() * CANVAS_WIDTH, y: this.random() * CANVAS_HEIGHT * 0.7,
-          vx: (this.random() - 0.5) * 0.5, vy: (this.random() - 0.5) * 0.3,
-          life: 120, maxLife: 120, color: '#FFEB3B', size: 3 + this.random() * 3, type: 'firefly',
-        });
+      const isTransitioning = this.state.isTransitioning;
+      const transitionProgress = this.state.transitionProgress;
+
+      // Fireflies for Night/Magical biomes
+      if (biome === 'firefly' || biome === 'crystal' || (isTransitioning && (this.state.transitioningBiome === 'firefly' || this.state.transitioningBiome === 'crystal'))) {
+        const opacity = (biome === 'firefly' || biome === 'crystal') ? 1 : transitionProgress;
+        if (this.random() < opacity) {
+          this.particles.push({
+            x: this.random() * CANVAS_WIDTH, y: this.random() * CANVAS_HEIGHT * 0.7,
+            vx: (this.random() - 0.5) * 0.5, vy: (this.random() - 0.5) * 0.3,
+            life: 120, maxLife: 120,
+            color: biome === 'crystal' ? '#B2EBF2' : '#FFEB3B',
+            size: 2 + this.random() * 3, type: 'firefly',
+          });
+        }
       }
-      if (biome === 'autumn') {
+
+      // Falling leaves for Autumn
+      if (biome === 'autumn' || (isTransitioning && this.state.transitioningBiome === 'autumn')) {
         this.particles.push({
           x: this.random() * CANVAS_WIDTH, y: -10,
           vx: (this.random() - 0.5) * 2, vy: 1 + this.random(),
@@ -2059,10 +2063,11 @@ export class GameEngine {
 
   // Smooth transition system
   getNextBiomeForDistance(distance: number): BiomeType | null {
+    // Sequential biome progression every 5000 units
     if (distance > 15000) return 'firefly';
-    else if (distance > 10000) return 'autumn';
-    else if (distance > 5000) return 'crystal';
-    return null;
+    if (distance > 10000) return 'autumn';
+    if (distance > 5000) return 'crystal';
+    return 'enchanted';
   }
 
   startBiomeTransition(targetBiome: BiomeType) {
@@ -2204,6 +2209,9 @@ export class GameEngine {
     this.renderJumpCharge(ctx);
     this.renderParticles(ctx);
 
+    // Global Lighting Tint based on Biome
+    this.renderLightingOverlay(ctx, w, h);
+
     // Vignette (in screen space)
     ctx.restore();
     const vg = ctx.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w * 0.7);
@@ -2212,6 +2220,35 @@ export class GameEngine {
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
+  }
+
+  renderLightingOverlay(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const biome = this.state.biome;
+    let tint = 'rgba(0,0,0,0)';
+
+    switch (biome) {
+      case 'autumn':
+        tint = 'rgba(255, 100, 0, 0.05)'; // Warm golden hour
+        break;
+      case 'crystal':
+        tint = 'rgba(100, 0, 255, 0.08)'; // Magical purple/blue glow
+        break;
+      case 'firefly':
+        tint = 'rgba(0, 20, 50, 0.2)'; // Deep magical night
+        break;
+      case 'enchanted':
+        tint = 'rgba(200, 255, 200, 0.03)'; // Fresh morning green
+        break;
+    }
+
+    if (this.state.isTransitioning && this.state.transitioningBiome) {
+      // Interpolate tint if needed, but for now just a simple overlay is fine
+    }
+
+    ctx.fillStyle = tint;
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   renderSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -2233,8 +2270,12 @@ export class GameEngine {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    // Sun with glow for enchanted/autumn biomes
-    if (this.state.biome === 'enchanted' || this.state.biome === 'autumn') {
+    // Sun/Moon with glow: transitions between solar and lunar based on biome
+    const isNight = this.state.biome === 'firefly' || this.state.biome === 'crystal';
+    const bodyColor = isNight ? '#E0F7FA' : '#FFF59D';
+    const coreColor = isNight ? 'rgba(224, 247, 250, 0.95)' : 'rgba(255, 255, 240, 0.98)';
+
+    { // Always show some celestial body
       const sunX = w * 0.82;
       const sunY = h * 0.13;
       const pulse = 1 + Math.sin(this.state.gameTime * 0.02) * 0.06;
@@ -2247,15 +2288,16 @@ export class GameEngine {
       ctx.fillStyle = sunGlow;
       ctx.fillRect(sunX - 100, sunY - 100, 200, 200);
 
-      // Sun rays
+      // Celestial rays/glow
       ctx.save();
-      ctx.globalAlpha = 0.12 + Math.sin(this.state.gameTime * 0.015) * 0.05;
-      ctx.strokeStyle = '#FFF59D';
+      ctx.globalAlpha = (isNight ? 0.08 : 0.12) + Math.sin(this.state.gameTime * 0.015) * 0.05;
+      ctx.strokeStyle = bodyColor;
       ctx.lineWidth = 2;
-      for (let i = 0; i < 12; i++) {
-        const angle = (i / 12) * Math.PI * 2 + this.state.gameTime * 0.003;
+      const rayCount = isNight ? 8 : 12;
+      for (let i = 0; i < rayCount; i++) {
+        const angle = (i / rayCount) * Math.PI * 2 + this.state.gameTime * 0.003;
         const innerR = 28 * pulse;
-        const outerR = 55 + Math.sin(angle * 3 + this.state.gameTime * 0.02) * 12;
+        const outerR = (isNight ? 45 : 55) + Math.sin(angle * 3 + this.state.gameTime * 0.02) * 12;
         ctx.beginPath();
         ctx.moveTo(sunX + Math.cos(angle) * innerR, sunY + Math.sin(angle) * innerR);
         ctx.lineTo(sunX + Math.cos(angle) * outerR, sunY + Math.sin(angle) * outerR);
@@ -2263,11 +2305,16 @@ export class GameEngine {
       }
       ctx.restore();
 
-      // Sun core
+      // Celestial core
       const sunCore = ctx.createRadialGradient(sunX - 4, sunY - 4, 2, sunX, sunY, 22 * pulse);
-      sunCore.addColorStop(0, 'rgba(255,255,240,0.98)');
-      sunCore.addColorStop(0.6, 'rgba(255,238,88,0.92)');
-      sunCore.addColorStop(1, 'rgba(255,202,40,0.7)');
+      sunCore.addColorStop(0, coreColor);
+      if (isNight) {
+        sunCore.addColorStop(0.6, 'rgba(178, 235, 242, 0.8)');
+        sunCore.addColorStop(1, 'rgba(128, 222, 234, 0.6)');
+      } else {
+        sunCore.addColorStop(0.6, 'rgba(255,238,88,0.92)');
+        sunCore.addColorStop(1, 'rgba(255,202,40,0.7)');
+      }
       ctx.fillStyle = sunCore;
       ctx.beginPath();
       ctx.arc(sunX, sunY, 22 * pulse, 0, Math.PI * 2);
@@ -2440,90 +2487,88 @@ export class GameEngine {
   }
 
   drawMountain(ctx: CanvasRenderingContext2D, x: number, baseY: number, scale: number, color: string) {
-    const h = scale * 150;
-    // Mountain body with gradient
+    const h = scale * 180; // Taller mountains for better proportions
+    const w = h * 1.2; // Wider base
+
+    // Mountain body with smoother gradient
     const mtGrad = ctx.createLinearGradient(x, baseY + 100 - h, x, baseY + 100);
-    mtGrad.addColorStop(0, color + 'A0');
-    mtGrad.addColorStop(0.6, color + '70');
-    mtGrad.addColorStop(1, color + '40');
+    mtGrad.addColorStop(0, color);
+    mtGrad.addColorStop(1, this.darkenColor(color, 40));
     ctx.fillStyle = mtGrad;
+
     ctx.beginPath();
-    ctx.moveTo(x - h * 0.8, baseY + 100);
+    ctx.moveTo(x - w / 2, baseY + 100);
     ctx.lineTo(x, baseY + 100 - h);
-    ctx.lineTo(x + h * 0.8, baseY + 100);
+    ctx.lineTo(x + w / 2, baseY + 100);
     ctx.fill();
-    // Shaded side
-    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+
+    // Aesthetic shading for depth
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.beginPath();
     ctx.moveTo(x, baseY + 100 - h);
-    ctx.lineTo(x + h * 0.8, baseY + 100);
+    ctx.lineTo(x + w / 2, baseY + 100);
     ctx.lineTo(x, baseY + 100);
     ctx.fill();
-    // Snow cap
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+
+    // Snow cap with better shape
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.beginPath();
-    ctx.moveTo(x - h * 0.15, baseY + 100 - h * 0.8);
-    ctx.lineTo(x, baseY + 100 - h);
-    ctx.lineTo(x + h * 0.15, baseY + 100 - h * 0.8);
-    ctx.fill();
-    // Snow edge detail
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.beginPath();
-    ctx.moveTo(x - h * 0.2, baseY + 100 - h * 0.75);
-    ctx.lineTo(x - h * 0.05, baseY + 100 - h * 0.82);
-    ctx.lineTo(x + h * 0.1, baseY + 100 - h * 0.78);
-    ctx.lineTo(x + h * 0.2, baseY + 100 - h * 0.72);
+    ctx.moveTo(x, baseY + 100 - h);
+    ctx.lineTo(x - h * 0.2, baseY + 100 - h * 0.7);
+    ctx.lineTo(x - h * 0.1, baseY + 100 - h * 0.75);
+    ctx.lineTo(x, baseY + 100 - h * 0.65);
+    ctx.lineTo(x + h * 0.1, baseY + 100 - h * 0.75);
+    ctx.lineTo(x + h * 0.2, baseY + 100 - h * 0.7);
+    ctx.closePath();
     ctx.fill();
   }
 
   drawTree(ctx: CanvasRenderingContext2D, x: number, baseY: number, scale: number, color: string, variant: number) {
-    const h = scale * 60;
-    // Trunk with gradient
-    const trunkGrad = ctx.createLinearGradient(x - 4 * scale, baseY - h * 0.3, x + 4 * scale, baseY + h * 0.1);
-    trunkGrad.addColorStop(0, '#6D4C41');
-    trunkGrad.addColorStop(1, '#4E342E');
-    ctx.fillStyle = trunkGrad;
-    ctx.fillRect(x - 4 * scale, baseY - h * 0.3, 8 * scale, h * 0.4);
-    // Foliage
+    const h = scale * 80; // Taller trees
+    const trunkW = 6 * scale;
+
+    // Trunk
+    ctx.fillStyle = '#4E342E';
+    ctx.fillRect(x - trunkW / 2, baseY - h * 0.2, trunkW, h * 0.3);
+
+    // Layered Foliage for depth
+    ctx.fillStyle = color;
     if (variant % 2 === 0) {
-      // Round tree with layered canopy
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, baseY - h * 0.5, h * 0.38, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = color + 'DD';
-      ctx.beginPath();
-      ctx.arc(x + h * 0.15, baseY - h * 0.62, h * 0.27, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(x - h * 0.12, baseY - h * 0.58, h * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-      // Light highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.beginPath();
-      ctx.arc(x - h * 0.08, baseY - h * 0.62, h * 0.15, 0, Math.PI * 2);
-      ctx.fill();
+      // Round stylized tree
+      for (let i = 0; i < 3; i++) {
+        const s = h * (0.4 - i * 0.05);
+        const ox = Math.sin(i * 2) * 5;
+        const oy = -h * (0.4 + i * 0.2);
+        ctx.beginPath();
+        ctx.arc(x + ox, baseY + oy, s, 0, Math.PI * 2);
+        ctx.fill();
+        // Highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(x + ox - s*0.3, baseY + oy - s*0.3, s*0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = color;
+      }
     } else {
-      // Triangle tree with layered tiers
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(x, baseY - h);
-      ctx.lineTo(x - h * 0.32, baseY - h * 0.2);
-      ctx.lineTo(x + h * 0.32, baseY - h * 0.2);
-      ctx.fill();
-      ctx.fillStyle = color + 'CC';
-      ctx.beginPath();
-      ctx.moveTo(x, baseY - h * 0.88);
-      ctx.lineTo(x - h * 0.27, baseY - h * 0.35);
-      ctx.lineTo(x + h * 0.27, baseY - h * 0.35);
-      ctx.fill();
-      // Snow/light on tip
-      ctx.fillStyle = 'rgba(255,255,255,0.14)';
-      ctx.beginPath();
-      ctx.moveTo(x, baseY - h);
-      ctx.lineTo(x - h * 0.08, baseY - h * 0.85);
-      ctx.lineTo(x + h * 0.08, baseY - h * 0.85);
-      ctx.fill();
+      // Pine/Conifer style
+      for (let i = 0; i < 3; i++) {
+        const w = h * (0.5 - i * 0.1);
+        const bh = h * 0.4;
+        const oy = -h * (0.2 + i * 0.25);
+        ctx.beginPath();
+        ctx.moveTo(x, baseY + oy - bh);
+        ctx.lineTo(x - w / 2, baseY + oy);
+        ctx.lineTo(x + w / 2, baseY + oy);
+        ctx.fill();
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.beginPath();
+        ctx.moveTo(x, baseY + oy);
+        ctx.lineTo(x + w / 2, baseY + oy);
+        ctx.lineTo(x, baseY + oy - bh * 0.5);
+        ctx.fill();
+        ctx.fillStyle = color;
+      }
     }
   }
 
