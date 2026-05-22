@@ -19,9 +19,22 @@ Adventure Colorful Endless is a vibrant, endless game experience built with Reac
 - **Balanced gap difficulty** with manageable platform spacing
 - **Backward exploration** with persistent landscape
 
-## Recent Improvements (v2.0)
+## Recent Improvements (v3.0)
 
-### Gameplay Enhancements
+### Visual & Atmospheric Overhaul
+- **World Cycle**: Implemented a continuous, sequential biome transition system (Enchanted -> Crystal -> Autumn -> Firefly) synced with distance milestones.
+- **Dynamic Lighting**: Global 'Lighting Tint' system that applies atmospheric overlays (golden morning, magical purple night, warm autumn glow) using canvas blending.
+- **Redesigned Environments**: Enhanced 'drawTree' and 'drawMountain' with layered foliage, realistic shading, and better proportions for a more professional aesthetic.
+- **Smooth Transitions**: Atmospheric elements like fireflies, falling leaves, and celestial bodies (Sun/Moon) now fade in and out gracefully.
+
+### Physics & Accessibility (Easy Mode)
+- **Momentum-based Physics**: Movement refactored from linear lerping to a professional acceleration/friction system for better "feel".
+- **Ledge Nudge**: New assist that gently pushes the player onto a platform if they just barely miss the edge.
+- **Enhanced Coyote Time**: 1.5x window for jumping after leaving a platform in Easy mode.
+- **Jump Assistant**: Persistent ground projection and high-visibility trajectory lines help players predict their landing.
+- **Extended Safe Zones**: Beginners enjoy 2000m of tutorial-guided gameplay with no enemies for the first 1000m.
+
+### Gameplay Enhancements (v2.0)
 - **Backward Exploration**: Landscape persists when moving left, allowing full bidirectional exploration
 - **Jump Visibility**: Camera system follows your jumps to show incoming terrain clearly
 - **Gap Difficulty Reduction**: Platform gaps reduced by 40% with guaranteed helper platforms for large gaps
@@ -62,6 +75,7 @@ Adventure Colorful Endless is a vibrant, endless game experience built with Reac
 - **Jump:** Space, ArrowUp, or W
 - **Move Down:** ArrowDown or S
 - **Stop Movement:** Release Arrow keys or A/D
+- **Charge Jump:** Hold Space/W/Up to increase power (indicated by UI)
 
 ## How to Play
 - Use the keys above to control your character
