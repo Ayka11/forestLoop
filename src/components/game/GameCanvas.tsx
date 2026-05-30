@@ -9,9 +9,15 @@ import LevelCompletionReward from './LevelCompletionReward';
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasReady, setCanvasReady] = useState(false);
-  const { engine, avatar, updateGameState, setScreen, saveProgress, showCheckpointToast, savedRunSnapshot, clearSavedProgress, pendingResume, markResumeConsumed, educationOverlay, showEducationOverlay, hideEducationOverlay, difficulty } = useGame();
+  const { engine, avatar, updateGameState, setScreen, saveProgress, showCheckpointToast, savedRunSnapshot, clearSavedProgress, pendingResume, markResumeConsumed, educationOverlay, showEducationOverlay, hideEducationOverlay, difficulty, gameMode: appGameMode, screen } = useGame();
+  // Map UI game mode to engine's internal mode
+  const gameMode = appGameMode === 'adventure' ? 'hard' : 'normal';
   const updateGameStateRef = useRef(updateGameState);
   const setScreenRef = useRef(setScreen);
+  // Capture resume intent once at mount — changes to savedRunSnapshot later (from
+  // checkpoint saves) must NOT re-trigger the engine-creation effect.
+  const initialSavedRun = useRef(savedRunSnapshot);
+  const initialPendingResume = useRef(pendingResume);
 
   // Level-up toast state
   const [levelUpToast, setLevelUpToast] = useState({
@@ -53,7 +59,7 @@ export default function GameCanvas() {
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const ge = new GameEngine(canvasRef.current, difficulty);
+    const ge = new GameEngine(canvasRef.current, difficulty, gameMode);
     ge.setAvatar(avatar);
     engine.current = ge;
 
@@ -96,8 +102,10 @@ export default function GameCanvas() {
     };
 
     ge.setMovementMode('idle');
-    const shouldResume = pendingResume && savedRunSnapshot;
-    ge.start(shouldResume ? savedRunSnapshot : undefined);
+    // Use the refs captured at mount — savedRunSnapshot state changes later (from
+    // checkpoint autosaves) must not trigger a new engine.start() call.
+    const shouldResume = initialPendingResume.current && initialSavedRun.current;
+    ge.start(shouldResume ? initialSavedRun.current! : undefined);
     if (shouldResume) {
       clearSavedProgressRef.current?.();
       markResumeConsumed();
@@ -123,7 +131,7 @@ export default function GameCanvas() {
       engine.current = null;
       setCanvasReady(false);
     };
-  }, [avatar, difficulty, savedRunSnapshot, pendingResume, markResumeConsumed, clearSavedProgressRef, engine, hideEducationOverlay, showEducationOverlay]);
+  }, [avatar, difficulty, gameMode, markResumeConsumed, engine, hideEducationOverlay, showEducationOverlay]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -288,6 +296,7 @@ export default function GameCanvas() {
         onStopMoving={handleStopMoving}
         onReleaseJump={handleTouchRelease}
         enabled={canvasReady}
+        screen={screen}
       />
       <LevelUpToast
         visible={levelUpToast.visible}

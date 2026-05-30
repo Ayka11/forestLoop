@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { GameState, Resources, AvatarConfig, ShopItem, DailyChallenge, ChallengeProgress, DifficultyLevel, DIFFICULTY_CONFIGS } from '@/game/types';
+import { GameState, Resources, AvatarConfig, ShopItem, DailyChallenge, ChallengeProgress, DifficultyLevel, AppGameMode, DIFFICULTY_CONFIGS } from '@/game/types';
 import { GameEngine, SavedRun } from '@/game/engine';
 
 export type ScreenType = 'menu' | 'playing' | 'paused' | 'gameover' | 'shop' | 'avatar' | 'achievements' | 'crafting' | 'daily' | 'leaderboard';
@@ -48,9 +48,15 @@ interface GameContextType {
   hideEducationOverlay: () => void;
   difficulty: DifficultyLevel;
   setDifficulty: (d: DifficultyLevel) => void;
+  gameMode: AppGameMode;
+  setGameMode: (m: AppGameMode) => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
+
+// Check hard mode exclusive unlock flags from localStorage
+const brambleFoxUnlocked = localStorage.getItem('flo_unlockedBrambleFox') === '1';
+const thornlingUnlocked  = localStorage.getItem('flo_unlockedThornling')  === '1';
 
 const DEFAULT_SHOP_ITEMS: ShopItem[] = [
   // ── Skins ──
@@ -61,6 +67,9 @@ const DEFAULT_SHOP_ITEMS: ShopItem[] = [
   { id: 'skin_rainbow', name: 'Rainbow Fox', description: 'All the colors!', price: 1500, category: 'skin', rarity: 'legendary', owned: false, equipped: false, icon: 'rainbow', color: '#E040FB' },
   { id: 'skin_berry', name: 'Berry Fox', description: 'Sweet strawberry scent', price: 250, category: 'skin', rarity: 'common', owned: false, equipped: false, icon: 'berry', color: '#FF69B4' },
   { id: 'skin_panda', name: 'Panda Bear', description: 'Adorable and fluffy', price: 450, category: 'skin', rarity: 'rare', owned: false, equipped: false, icon: 'panda', color: '#FF8A80' },
+  // ── Hard Mode Exclusive Skins (unlocked by defeating Bramble King / reaching 1000m) ──
+  { id: 'skin_bramble_fox', name: 'Bramble Fox 🌿', description: brambleFoxUnlocked ? 'Defeat Bramble King reward — thorny and fierce!' : '🔒 Defeat the Bramble King in Hard Mode', price: 0, category: 'skin', rarity: 'legendary', owned: brambleFoxUnlocked, equipped: false, icon: 'fox', color: '#2E7D32' },
+  { id: 'skin_thornling',   name: 'Thornling Buddy 🌵', description: thornlingUnlocked  ? 'Hard Mode veteran — 1000m survived!' : '🔒 Run 1000m in Hard Mode', price: 0, category: 'skin', rarity: 'epic', owned: thornlingUnlocked, equipped: false, icon: 'bunny', color: '#558B2F' },
 
   // ── Hats ──
   { id: 'hat_crown', name: 'Royal Crown', description: 'Feel like royalty', price: 300, category: 'hat', rarity: 'rare', owned: false, equipped: false, icon: 'crown', color: '#FFD700' },
@@ -93,55 +102,80 @@ const DEFAULT_SHOP_ITEMS: ShopItem[] = [
   { id: 'block_candy', name: 'Candy Blocks', description: 'Sweet construction', price: 400, category: 'block', rarity: 'rare', owned: false, equipped: false, icon: 'candy', color: '#F48FB1' },
 ];
 
-// Challenge templates for different difficulty levels
-const CHALLENGE_TEMPLATES = {
+// Challenge pool — all achievable in a normal session
+// time targets are in seconds (engine sends dt/60 per frame ≈ 1 unit/second)
+// distance targets are in pixels (engine sends distanceDelta each frame)
+// collect targets are item counts (engine sends 1 per collect)
+// combo targets are combo count (engine sends comboDelta per collect)
+// jump targets are jump counts (engine sends 1 per jump)
+const CHALLENGE_POOL = {
   easy: [
-    { id: 'dist_100', title: 'First Steps', description: 'Travel 100m in one run', type: 'distance' as const, target: 100, reward: 30, progress: 0, completed: false, claimed: false },
-    { id: 'collect_5', title: 'Gatherer', description: 'Collect 5 leaf tokens', type: 'collect' as const, target: 5, reward: 25, progress: 0, completed: false, claimed: false },
-    { id: 'jump_10', title: 'Hopper', description: 'Jump 10 times', type: 'jump' as const, target: 10, reward: 30, progress: 0, completed: false, claimed: false },
-    { id: 'time_120', title: 'Quick Run', description: 'Play for 2 minutes', type: 'time' as const, target: 120, reward: 35, progress: 0, completed: false, claimed: false },
+    { id: 'dist_80',    title: 'Forest Stroll',   description: 'Run 80m',                    type: 'distance' as const, target: 80,  reward: 20 },
+    { id: 'collect_5',  title: 'Leaf Picker',      description: 'Collect 5 tokens',            type: 'collect'  as const, target: 5,   reward: 20 },
+    { id: 'jump_8',     title: 'Boing!',           description: 'Jump 8 times',                type: 'jump'     as const, target: 8,   reward: 20 },
+    { id: 'time_60',    title: 'One Minute',       description: 'Play for 1 minute',           type: 'time'     as const, target: 60,  reward: 25 },
+    { id: 'dist_120',   title: 'Explorer',         description: 'Run 120m',                    type: 'distance' as const, target: 120, reward: 25 },
+    { id: 'collect_8',  title: 'Token Trot',       description: 'Collect 8 tokens',            type: 'collect'  as const, target: 8,   reward: 25 },
   ],
   medium: [
-    { id: 'dist_250', title: 'Runner', description: 'Travel 250m in one run', type: 'distance' as const, target: 250, reward: 45, progress: 0, completed: false, claimed: false },
-    { id: 'collect_12', title: 'Collector', description: 'Collect 12 leaf tokens', type: 'collect' as const, target: 12, reward: 40, progress: 0, completed: false, claimed: false },
-    { id: 'combo_3', title: 'Combo Expert', description: 'Reach 3x combo', type: 'combo' as const, target: 3, reward: 45, progress: 0, completed: false, claimed: false },
-    { id: 'jump_25', title: 'Leaper', description: 'Jump 25 times', type: 'jump' as const, target: 25, reward: 40, progress: 0, completed: false, claimed: false },
+    { id: 'dist_200',   title: 'Trail Blazer',     description: 'Run 200m in one go',          type: 'distance' as const, target: 200, reward: 40 },
+    { id: 'collect_15', title: 'Token Hoarder',    description: 'Collect 15 tokens',           type: 'collect'  as const, target: 15,  reward: 35 },
+    { id: 'combo_3',    title: 'Chain Reaction',   description: 'Build a 3× combo',            type: 'combo'    as const, target: 3,   reward: 40 },
+    { id: 'jump_20',    title: 'Springy Legs',     description: 'Jump 20 times',               type: 'jump'     as const, target: 20,  reward: 35 },
+    { id: 'time_120',   title: 'Two Minutes',      description: 'Play for 2 minutes',          type: 'time'     as const, target: 120, reward: 40 },
+    { id: 'platform_8', title: 'Platform Hopper',  description: 'Land on 8 platforms',         type: 'platform' as const, target: 8,   reward: 35 },
   ],
   hard: [
-    { id: 'dist_400', title: 'Marathon', description: 'Travel 400m in one run', type: 'distance' as const, target: 400, reward: 60, progress: 0, completed: false, claimed: false },
-    { id: 'collect_18', title: 'Token Master', description: 'Collect 18 leaf tokens', type: 'collect' as const, target: 18, reward: 50, progress: 0, completed: false, claimed: false },
-    { id: 'combo_5', title: 'Combo Master', description: 'Reach 5x combo', type: 'combo' as const, target: 5, reward: 60, progress: 0, completed: false, claimed: false },
-    { id: 'time_300', title: 'Endurance', description: 'Play for 5 minutes', type: 'time' as const, target: 300, reward: 55, progress: 0, completed: false, claimed: false },
+    { id: 'dist_350',   title: 'Long Haul',        description: 'Run 350m in one go',          type: 'distance' as const, target: 350, reward: 60 },
+    { id: 'collect_25', title: 'Token Master',     description: 'Collect 25 tokens',           type: 'collect'  as const, target: 25,  reward: 55 },
+    { id: 'combo_5',    title: 'Combo King',       description: 'Build a 5× combo',            type: 'combo'    as const, target: 5,   reward: 60 },
+    { id: 'time_180',   title: 'Endurance Run',    description: 'Play for 3 minutes',          type: 'time'     as const, target: 180, reward: 55 },
+    { id: 'jump_35',    title: 'Jump Legend',      description: 'Jump 35 times',               type: 'jump'     as const, target: 35,  reward: 50 },
+    { id: 'platform_15',title: 'Platform Master',  description: 'Land on 15 platforms',        type: 'platform' as const, target: 15,  reward: 55 },
   ],
 };
 
-// Generate daily challenges based on difficulty and variety
+// Generate daily challenges — rotate pool by day-of-week so they vary each day
 function generateDailyChallenges(): DailyChallenge[] {
-  const dayOfWeek = new Date().getDay();
+  const dayOfWeek = new Date().getDay(); // 0=Sun … 6=Sat
   const dayOfMonth = new Date().getDate();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  
-  const challenges: DailyChallenge[] = [];
-  
-  // Always include 2 easy, 2 medium, 1 hard challenge
-  challenges.push(...CHALLENGE_TEMPLATES.easy.slice(0, 2));
-  challenges.push(...CHALLENGE_TEMPLATES.medium.slice(0, 2));
-  challenges.push(...CHALLENGE_TEMPLATES.hard.slice(0, 1));
-  
-  // Weekend special challenge
+
+  // Rotate within each pool using day-of-week so the set changes daily
+  const easyPool  = CHALLENGE_POOL.easy;
+  const medPool   = CHALLENGE_POOL.medium;
+  const hardPool  = CHALLENGE_POOL.hard;
+
+  const pick = (pool: typeof easyPool, offset: number, count: number) =>
+    Array.from({ length: count }, (_, i) => {
+      const src = pool[(offset + i) % pool.length];
+      return { ...src, progress: 0, completed: false, claimed: false };
+    });
+
+  const challenges: DailyChallenge[] = [
+    ...pick(easyPool,  dayOfWeek,     2),  // 2 easy
+    ...pick(medPool,   dayOfWeek + 1, 2),  // 2 medium
+    ...pick(hardPool,  dayOfWeek,     1),  // 1 hard
+  ];
+
+  // Weekend bonus — uses 'collect' type so it can actually be tracked
   if (isWeekend) {
     challenges.push({
-      id: 'weekend_bonus', title: 'Weekend Warrior', description: 'Complete any 3 challenges', type: 'weekend', target: 3, reward: 100, progress: 0, completed: false, claimed: false
+      id: 'weekend_bonus', title: 'Weekend Hunter',
+      description: 'Collect 30 tokens this weekend',
+      type: 'collect', target: 30, reward: 80, progress: 0, completed: false, claimed: false,
     });
   }
-  
-  // Monthly special challenge
+
+  // First-week-of-month bonus — uses 'distance' type
   if (dayOfMonth <= 7) {
     challenges.push({
-      id: 'monthly_bonus', title: 'Monthly Hero', description: 'Complete 5 challenges this month', type: 'monthly', target: 5, reward: 200, progress: 0, completed: false, claimed: false
+      id: 'monthly_bonus', title: 'Month Opener',
+      description: 'Run 500m to start the month',
+      type: 'distance', target: 500, reward: 150, progress: 0, completed: false, claimed: false,
     });
   }
-  
+
   return challenges;
 }
 
@@ -158,6 +192,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(() => {
     const saved = localStorage.getItem('flo_difficulty');
     return (saved as DifficultyLevel) || 'normal';
+  });
+  const [gameMode, setGameModeState] = useState<AppGameMode>(() => {
+    const saved = localStorage.getItem('flo_gameMode');
+    return (saved as AppGameMode) || 'endless';
   });
   const [avatar, setAvatar] = useState<AvatarConfig>(() => {
     const saved = localStorage.getItem('flo_avatar');
@@ -249,7 +287,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (checkpointTimer.current) window.clearTimeout(checkpointTimer.current);
     checkpointTimer.current = window.setTimeout(() => {
       setCheckpointMessage(null);
-    }, 3200);
+    }, 2500);
   }, []);
 
   const showEducationOverlay = useCallback((item: string, position: { x: number; y: number }) => {
@@ -350,6 +388,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       saveProgress();
       engineRef.current.stop();           // Important: fully stop the engine
     }
+    setEducationOverlay({ visible: false, item: '', position: { x: 0, y: 0 } });
     setScreen('menu');
     setGameState(null);                    // Clear current run data
   }, [saveProgress]);
@@ -416,6 +455,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('flo_difficulty', d);
   }, []);
 
+  const handleSetGameMode = useCallback((m: AppGameMode) => {
+    setGameModeState(m);
+    localStorage.setItem('flo_gameMode', m);
+  }, []);
+
+
   return (
     <GameContext.Provider value={{
       gameState,
@@ -461,6 +506,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       hideEducationOverlay,
       difficulty,
       setDifficulty: handleSetDifficulty,
+      gameMode,
+      setGameMode: handleSetGameMode,
     }}>
       {children}
     </GameContext.Provider>
