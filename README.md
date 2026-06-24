@@ -37,6 +37,7 @@ Adventure Colorful Endless is a vibrant, endless game experience built with Reac
 - Use the keys above to control your character
 - Walk or run to avoid hazards and explore terrain
 - Jump to overcome obstacles
+- **Defeat enemies** in three ways: jump and land on top of them to stomp (you bounce off), dash through them (Alt + Right), or run them down while Super Speed is active. Defeating an enemy rewards leaf tokens and builds your combo.
 - Collect leaf tokens to buy items from the shop
 - Complete daily challenges for rewards
 - Customize your avatar with skins, hats, pets, and more
