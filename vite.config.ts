@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const isProduction = mode === 'production';
   const isAzure = env.AZURE_DEPLOYMENT === 'true';
+  // Netlify always sets NETLIFY=true during its build. The site is served from
+  // the domain root, so it must use an absolute '/' base regardless of the
+  // Azure-oriented values that .env.production also sets in production mode.
+  const isNetlify = env.NETLIFY === 'true';
+  // itch.io serves HTML5 games inside an iframe from a relative URL, so all
+  // asset references must be relative ('./') rather than absolute ('/').
+  const isItch = env.ITCH_BUILD === 'true';
 
   return {
     server: {
@@ -22,7 +29,7 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    base: env.VITE_BASE_PATH || (isAzure ? '/app/' : '/'), // Use environment-specific base path
+    base: isItch ? './' : isNetlify ? '/' : env.VITE_BASE_PATH || (isAzure ? '/app/' : '/'), // itch.io needs relative paths; Netlify serves from root; others use env/host base
     build: {
       // Optimize bundle size
       chunkSizeWarningLimit: isAzure ? 250 : 300, // Stricter for Azure
@@ -57,7 +64,7 @@ export default defineConfig(({ mode }) => {
         mangle: isProduction,
       },
       // Azure-specific optimizations
-      target: isAzure ? 'es2015' : 'esnext',
+      target: isAzure || isItch ? 'es2015' : 'esnext',
       assetsInlineLimit: isAzure ? 4096 : 8192, // Lower inline limit for Azure
     },
     // Optimize dependencies

@@ -410,11 +410,13 @@ export class GameEngine {
     this.bgLayers.push({ offset: 0, speed: 0.08, elements: mountains });
 
     // Layer 3: Clouds + atmospheric elements
+    // Kept high in the sky, fewer in number and lighter so they read as ambient
+    // scenery instead of covering the play field or distracting from gameplay.
     const clouds: BackgroundElement[] = [];
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 8; i++) {
       clouds.push({
-        x: i * 220 + this.random() * 110, y: 20 + this.random() * 120,
-        type: 'cloud', scale: 0.4 + this.random() * 1.2,
+        x: i * 320 + this.random() * 160, y: 15 + this.random() * 70,
+        type: 'cloud', scale: 0.4 + this.random() * 0.7,
         color: '#ffffff', variant: Math.floor(this.random() * 4),
       });
     }
@@ -1334,7 +1336,25 @@ export class GameEngine {
       if (!p.invincible && this.respawnTimer <= 0) {
         if (p.x + pw > o.x + 4 && p.x < o.x + o.width - 4 &&
             p.y + ph > o.y + 4 && p.y < o.y + o.height - 4) {
-          if (p.hasShield) {
+
+          // --- Offensive tools: ways for the player to WIN against enemies ---
+          // 1. Stomp: coming down onto an enemy from above defeats it and bounces.
+          const fallingOnto = p.vy > 1 && (p.y + ph) < o.y + o.height * 0.6;
+          // 2. Dash / super speed plow straight through enemies.
+          const charging = p.dashTimer > 0 || this.movementMode === 'superSpeed';
+
+          if (fallingOnto) {
+            this.defeatObstacle(o);
+            p.vy = JUMP_FORCE * 0.55; // bounce up off the enemy
+            p.jumping = true;
+            p.grounded = false;
+            Audio.playBounce();
+            continue;
+          } else if (charging) {
+            this.defeatObstacle(o);
+            this.cameraShake = 4;
+            continue;
+          } else if (p.hasShield) {
             p.hasShield = false;
             p.activePowerUp = null;
             p.powerUpTimer = 0;
@@ -1346,7 +1366,23 @@ export class GameEngine {
         }
       }
     }
-    this.obstacles = this.obstacles.filter(o => o.x > this.player.x - CANVAS_WIDTH);
+    this.obstacles = this.obstacles.filter(o => o.x > this.player.x - CANVAS_WIDTH && o.x > -1000);
+  }
+
+  // Reward the player for defeating an enemy and remove it from the world.
+  defeatObstacle(o: Obstacle) {
+    const fx = o.x + o.width / 2;
+    const fy = o.y + o.height / 2;
+    o.x = -9999; // mark for removal by the filter
+    this.state.combo++;
+    this.state.comboTimer = 120;
+    this.state.multiplier = Math.min(1 + Math.floor(this.state.combo / 5) * 0.5, 5);
+    const reward = Math.max(1, Math.floor(2 * this.state.multiplier));
+    this.state.leafTokens += reward;
+    this.state.totalLeafTokens += reward;
+    this.state.score += reward * 10;
+    Audio.playLeafToken();
+    this.spawnParticles(fx, fy, 14, '#FFD54F', 'sparkle');
   }
 
   handleDeath() {
@@ -1393,6 +1429,11 @@ export class GameEngine {
       }
     }
     this.particles = this.particles.filter(p => p.life > 0);
+    // Hard cap to keep frame time stable during heavy effects (drops oldest first).
+    const MAX_PARTICLES = 260;
+    if (this.particles.length > MAX_PARTICLES) {
+      this.particles.splice(0, this.particles.length - MAX_PARTICLES);
+    }
   }
 
   
@@ -1826,7 +1867,6 @@ export class GameEngine {
     vg.addColorStop(1, 'rgba(0,0,0,0.15)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, w, h);
-    ctx.restore();
   }
 
   renderSky(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -1976,7 +2016,7 @@ export class GameEngine {
 // ... (rest of the code remains the same)
 
   drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number) {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
     const s = scale * 40;
     ctx.beginPath();
     ctx.arc(x, y, s, 0, Math.PI * 2);
